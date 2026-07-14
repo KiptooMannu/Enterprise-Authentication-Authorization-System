@@ -1,6 +1,5 @@
 package com.authcore.authcore.controller;
 
-import com.authcore.authcore.entity.RefreshToken;
 import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.security.AuthResponse;
 import com.authcore.authcore.security.JwtService;
@@ -46,9 +45,10 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<?> logout(Authentication authentication, @RequestBody(required = false) Map<String, String> body) {
+    public ResponseEntity<?> logout(HttpServletRequest request, Authentication authentication, @RequestBody(required = false) Map<String, String> body) {
         if (authentication != null && authentication.isAuthenticated()) {
             UserEntity user = userService.findByEmail(authentication.getName());
+            blacklistCurrentAccessToken(request);
             refreshTokenService.deleteByUser(user);
             return ResponseEntity.ok(Map.of("status", "logged out"));
         }
@@ -65,14 +65,28 @@ public class AuthController {
     }
 
     @PostMapping("/logout-all")
-    public ResponseEntity<?> logoutAll(Authentication authentication) {
+    public ResponseEntity<?> logoutAll(HttpServletRequest request, Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(401).body(Map.of("error", "authentication required"));
         }
 
         UserEntity user = userService.findByEmail(authentication.getName());
+        blacklistCurrentAccessToken(request);
         refreshTokenService.deleteByUser(user);
         return ResponseEntity.ok(Map.of("status", "all sessions logged out"));
+    }
+
+    private void blacklistCurrentAccessToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            try {
+                java.util.Date expiryDate = jwtService.extractExpiration(token);
+                tokenBlacklistService.blacklist(token, expiryDate.toInstant());
+            } catch (Exception ignored) {
+                // Token may already be invalid or expired.
+            }
+        }
     }
 
     @PostMapping("/revoke")

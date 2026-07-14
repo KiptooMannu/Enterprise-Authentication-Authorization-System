@@ -17,10 +17,14 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailVerificationService emailVerificationService;
+    private final LoginAttemptService loginAttemptService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmailVerificationService emailVerificationService, LoginAttemptService loginAttemptService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.emailVerificationService = emailVerificationService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     public UserEntity registerUser(UserRegistrationRequest request) {
@@ -34,8 +38,12 @@ public class UserService {
         String hashedPassword = passwordEncoder.encode(request.password());
         UserEntity user = new UserEntity(request.username(), request.email(), hashedPassword);
         user.setRole(UserRole.USER);
-        user.setEnabled(true);
-        return userRepository.save(user);
+        user.setEnabled(true); // Enable by default; email verification deferred in tests
+        user = userRepository.save(user);
+        
+        emailVerificationService.createVerificationToken(user);
+        
+        return user;
     }
 
     public UserEntity authenticateUser(LoginRequest request) {
@@ -46,10 +54,17 @@ public class UserService {
             throw new IllegalArgumentException("Account is disabled");
         }
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new IllegalArgumentException("Invalid credentials");
+        if (loginAttemptService.isAccountLocked(user)) {
+            throw new IllegalArgumentException("Account is temporarily locked due to too many failed login attempts");
         }
 
+        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+            loginAttemptService.recordLoginAttempt(user, "unknown", false);
+            long remainingAttempts = loginAttemptService.getRemainingAttempts(user);
+            throw new IllegalArgumentException("Invalid credentials. Remaining attempts: " + remainingAttempts);
+        }
+
+        loginAttemptService.recordLoginAttempt(user, "unknown", true);
         return user;
     }
 
@@ -63,6 +78,9 @@ public class UserService {
     }
 
     public UserEntity findById(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("User ID cannot be null");
+        }
         return userRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
     }

@@ -30,6 +30,10 @@ public class TokenBlacklistService {
     }
 
     public void revokeByToken(String token) {
-        repo.findByToken(token).ifPresent(t -> repo.delete(t));
+        repo.findByToken(token).ifPresent(t -> {
+            if (t != null) {
+                repo.delete(t);
+            }
+        });
     }
 }

@@ -8,10 +8,17 @@ import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.security.AuthResponse;
 import com.authcore.authcore.security.JwtService;
 import com.authcore.authcore.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.List;
+import java.util.stream.Collectors;
+import com.authcore.authcore.entity.RefreshToken;
 
 @RestController
 @RequestMapping("/api/users")
@@ -20,25 +27,34 @@ public class UserController {
     private final UserService userService;
     private final JwtService jwtService;
     private final com.authcore.authcore.service.RefreshTokenService refreshTokenService;
+    private final com.authcore.authcore.service.PasswordResetService passwordResetService;
+    private final com.authcore.authcore.service.AuditLogService auditLogService;
 
-    public UserController(UserService userService, JwtService jwtService, com.authcore.authcore.service.RefreshTokenService refreshTokenService) {
+    public UserController(UserService userService, JwtService jwtService, com.authcore.authcore.service.RefreshTokenService refreshTokenService, com.authcore.authcore.service.PasswordResetService passwordResetService, com.authcore.authcore.service.AuditLogService auditLogService) {
         this.userService = userService;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
+        this.passwordResetService = passwordResetService;
+        this.auditLogService = auditLogService;
     }
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public UserResponse register(@Valid @RequestBody UserRegistrationRequest request) {
+    public UserResponse register(@Valid @RequestBody UserRegistrationRequest request, HttpServletRequest httpRequest) {
         UserEntity user = userService.registerUser(request);
+        String ipAddress = getClientIpAddress(httpRequest);
+        auditLogService.logEvent(user, "USER_REGISTERED", "User", user.getId(), ipAddress, "User registered with email: " + user.getEmail());
         return toUserResponse(user);
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+    public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         UserEntity user = userService.authenticateUser(request);
         String token = jwtService.generateToken(user.getEmail());
-        var refresh = refreshTokenService.createRefreshToken(user);
+        String ipAddress = getClientIpAddress(httpRequest);
+        String userAgent = httpRequest.getHeader("User-Agent");
+        var refresh = refreshTokenService.createRefreshToken(user, ipAddress, userAgent);
+        auditLogService.logEvent(user, "USER_LOGIN", "User", user.getId(), ipAddress, "User logged in successfully");
         return new AuthResponse(token, refresh.getToken(), "success");
     }
 
@@ -49,12 +65,93 @@ public class UserController {
     }
 
     @PostMapping("/change-password")
-    public UserResponse changePassword(Authentication authentication, @Valid @RequestBody ChangePasswordRequest request) {
+    public UserResponse changePassword(Authentication authentication, @Valid @RequestBody ChangePasswordRequest request, HttpServletRequest httpRequest) {
         UserEntity user = userService.changePassword(authentication.getName(), request);
+        String ipAddress = getClientIpAddress(httpRequest);
+        auditLogService.logEvent(user, "PASSWORD_CHANGED", "User", user.getId(), ipAddress, "User changed password");
         return toUserResponse(user);
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        if (email == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Email is required"));
+        }
+        try {
+            passwordResetService.createPasswordResetToken(email);
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Password reset email sent"));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        String newPassword = body.get("newPassword");
+        
+        if (token == null || newPassword == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Token and new password are required"));
+        }
+        
+        boolean success = passwordResetService.resetPassword(token, newPassword);
+        if (success) {
+            return ResponseEntity.ok(Map.of("status", "success", "message", "Password reset successfully"));
+        } else {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid or expired reset token"));
+        }
+    }
+
+    @GetMapping("/sessions")
+    public ResponseEntity<?> getActiveSessions(Authentication authentication) {
+        UserEntity user = userService.findByEmail(authentication.getName());
+        List<RefreshToken> tokens = refreshTokenService.getActiveSessions(user);
+        List<Map<String, Object>> sessions = tokens.stream().map(t -> {
+            Map<String, Object> session = new java.util.HashMap<>();
+            session.put("id", t.getId());
+            session.put("token", t.getToken());
+            session.put("ipAddress", t.getIpAddress() != null ? t.getIpAddress() : "unknown");
+            session.put("userAgent", t.getUserAgent() != null ? t.getUserAgent() : "unknown");
+            session.put("createdAt", t.getCreatedAt());
+            session.put("expiryDate", t.getExpiryDate());
+            return session;
+        }).collect(Collectors.toList());
+        return ResponseEntity.ok(sessions);
+    }
+
+    @PostMapping("/sessions/revoke")
+    public ResponseEntity<?> revokeSession(Authentication authentication, @RequestBody Map<String, String> body) {
+        String token = body.get("token");
+        if (token == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Token is required"));
+        }
+        refreshTokenService.deleteByToken(token);
+        return ResponseEntity.ok(Map.of("status", "success", "message", "Session revoked successfully"));
+    }
+
+    @PostMapping("/sessions/revoke-all")
+    public ResponseEntity<?> revokeAllSessions(Authentication authentication) {
+        UserEntity user = userService.findByEmail(authentication.getName());
+        refreshTokenService.deleteByUser(user);
+        return ResponseEntity.ok(Map.of("status", "success", "message", "All sessions revoked"));
+    }
+
+    @GetMapping("/audit-logs")
+    public ResponseEntity<?> getMyAuditLogs(Authentication authentication) {
+        UserEntity user = userService.findByEmail(authentication.getName());
+        return ResponseEntity.ok(auditLogService.getUserAuditLogs(user));
     }
 
     private UserResponse toUserResponse(UserEntity user) {
         return new UserResponse(user.getId(), user.getUsername(), user.getEmail(), user.getRole(), user.isEnabled(), user.getCreatedAt());
+    }
+
+    private String getClientIpAddress(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }
