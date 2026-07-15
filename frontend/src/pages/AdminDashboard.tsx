@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import api from '../services/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
@@ -10,11 +12,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import AnalyticsDashboard from '../components/Analytics'
+import ThreatDetectionDashboard from '../components/ThreatDetection'
 import { 
   Shield, Users, FileText, ArrowLeft, ToggleLeft, ToggleRight, ShieldAlert, CheckCircle2,
   Settings, Key, Lock, Activity, AlertTriangle, Search, Filter, Download, RefreshCw,
   Monitor, Smartphone, Globe, Clock, Ban, UserCheck, UserX, LogOut, Trash2, Edit,
-  Calendar, MapPin, Fingerprint, ShieldCheck, Database, Server, Zap
+  Calendar, MapPin, Fingerprint, ShieldCheck, Database, Server, Zap, BarChart3, Radar
 } from 'lucide-react'
 
 interface User {
@@ -85,8 +89,8 @@ const AdminDashboard: React.FC = () => {
     setError('')
     try {
       const [usersRes, logsRes] = await Promise.all([
-        fetch('/api/admin/users').then(r => r.json()),
-        fetch('/api/admin/audit-logs').then(r => r.json())
+        api.get('/admin/users').then(res => res.data),
+        api.get('/admin/audit-logs').then(res => res.data)
       ])
       setUsers(usersRes)
       setLogs(logsRes)
@@ -105,7 +109,7 @@ const AdminDashboard: React.FC = () => {
     setError('')
     setSuccess('')
     try {
-      await fetch(`/api/admin/users/${userId}/status?enabled=${!currentStatus}`, { method: 'PUT' })
+      await api.put(`/admin/users/${userId}/status?enabled=${!currentStatus}`)
       setSuccess('User status updated successfully.')
       fetchAdminData()
     } catch (err: any) {
@@ -117,7 +121,7 @@ const AdminDashboard: React.FC = () => {
     setError('')
     setSuccess('')
     try {
-      await fetch(`/api/admin/users/${userId}/role?role=${newRole}`, { method: 'PUT' })
+      await api.put(`/admin/users/${userId}/role?role=${newRole}`)
       setSuccess('User role updated successfully.')
       fetchAdminData()
     } catch (err: any) {
@@ -130,7 +134,7 @@ const AdminDashboard: React.FC = () => {
     setError('')
     setSuccess('')
     try {
-      await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' })
+      await api.delete(`/admin/users/${userId}`)
       setSuccess('User deleted successfully.')
       fetchAdminData()
     } catch (err: any) {
@@ -142,7 +146,7 @@ const AdminDashboard: React.FC = () => {
     setError('')
     setSuccess('')
     try {
-      await fetch(`/api/admin/sessions/${sessionId}/revoke`, { method: 'POST' })
+      await api.post(`/admin/sessions/${sessionId}/revoke`)
       setSuccess('Session revoked successfully.')
       fetchAdminData()
     } catch (err: any) {
@@ -154,7 +158,7 @@ const AdminDashboard: React.FC = () => {
     setError('')
     setSuccess('')
     try {
-      await fetch(`/api/admin/refresh-tokens/${tokenId}/revoke`, { method: 'POST' })
+      await api.post(`/admin/refresh-tokens/${tokenId}/revoke`)
       setSuccess('Refresh token revoked successfully.')
       fetchAdminData()
     } catch (err: any) {
@@ -272,7 +276,9 @@ const AdminDashboard: React.FC = () => {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-8 lg:w-auto">
+          <TabsList className="grid w-full grid-cols-10 lg:w-auto">
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="threats">Threats</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="roles">Roles</TabsTrigger>
             <TabsTrigger value="sessions">Sessions</TabsTrigger>
@@ -282,6 +288,38 @@ const AdminDashboard: React.FC = () => {
             <TabsTrigger value="reports">Reports</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Analytics Dashboard
+                </CardTitle>
+                <CardDescription>Real-time insights and metrics</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <AnalyticsDashboard />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Threat Detection Tab */}
+          <TabsContent value="threats" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Radar className="h-5 w-5" />
+                  Threat Detection
+                </CardTitle>
+                <CardDescription>Real-time security monitoring and threat analysis</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ThreatDetectionDashboard />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Users Tab */}
           <TabsContent value="users" className="space-y-4">

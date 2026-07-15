@@ -13,6 +13,7 @@ import ManagerDashboard from './pages/ManagerDashboard'
 import AccessDenied from './pages/AccessDenied'
 import MFASetup from './pages/MFASetup'
 import ProfileManagement from './pages/ProfileManagement'
+import WebAuthnSetup from './pages/WebAuthnSetup'
 
 function App() {
   return (
@@ -62,6 +63,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProfileManagement />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/webauthn" 
+            element={
+              <ProtectedRoute>
+                <WebAuthnSetup />
               </ProtectedRoute>
             } 
           />

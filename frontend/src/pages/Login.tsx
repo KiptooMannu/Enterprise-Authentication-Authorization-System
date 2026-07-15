@@ -23,9 +23,24 @@ const Login: React.FC = () => {
     }
   }, [searchParams])
 
+  const handleOAuthLogin = (provider: string) => {
+    setError('')
+    if (!navigator.onLine) {
+      setError('Network error: No internet connection. Please check your network and try again.')
+      return
+    }
+    window.location.href = `http://localhost:8080/oauth2/authorization/${provider}`
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+
+    if (!navigator.onLine) {
+      setError('Network error: No internet connection. Please check your network and try again.')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -137,7 +152,7 @@ const Login: React.FC = () => {
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={() => window.location.href = 'http://localhost:8080/oauth2/authorization/google'}
+                onClick={() => handleOAuthLogin('google')}
               >
                 Google
               </Button>
@@ -145,7 +160,7 @@ const Login: React.FC = () => {
                 type="button"
                 variant="outline"
                 className="w-full"
-                onClick={() => window.location.href = 'http://localhost:8080/oauth2/authorization/github'}
+                onClick={() => handleOAuthLogin('github')}
               >
                 GitHub
               </Button>

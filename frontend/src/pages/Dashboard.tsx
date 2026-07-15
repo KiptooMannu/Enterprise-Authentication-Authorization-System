@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input'
 import { LogOut, User, Shield, Clock, Globe, Key, FileText, CheckCircle2, AlertCircle, X, ShieldCheck } from 'lucide-react'
 import axios from 'axios'
-import { sessionApi, oauthApi, authApi } from '../services/api'
+import api, { sessionApi, oauthApi, authApi } from '../services/api'
+
 
 interface Session {
   id: number
@@ -112,7 +113,7 @@ const Dashboard: React.FC = () => {
     setError('')
     setLoading(true)
     try {
-      const logsRes = await axios.get('/api/users/audit-logs')
+      const logsRes = await api.get('/users/audit-logs')
       setLogs(logsRes.data)
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load login history.')
