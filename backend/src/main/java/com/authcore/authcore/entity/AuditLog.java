@@ -1,5 +1,7 @@
 package com.authcore.authcore.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -11,6 +13,7 @@ public class AuditLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private UserEntity user;
@@ -48,6 +51,7 @@ public class AuditLog {
         return id;
     }
 
+    @JsonIgnore
     public UserEntity getUser() {
         return user;
     }
@@ -68,11 +72,21 @@ public class AuditLog {
         return entityType;
     }
 
+    @JsonProperty("targetType")
+    public String getTargetType() {
+        return entityType;
+    }
+
     public void setEntityType(String entityType) {
         this.entityType = entityType;
     }
 
     public Long getEntityId() {
+        return entityId;
+    }
+
+    @JsonProperty("targetId")
+    public Long getTargetId() {
         return entityId;
     }
 

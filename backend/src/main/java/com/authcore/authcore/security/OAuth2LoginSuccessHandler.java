@@ -7,6 +7,8 @@ import com.authcore.authcore.service.RefreshTokenService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.lang.NonNull;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -16,6 +18,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 @Component
@@ -24,11 +27,19 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     private final JwtService jwtService;
     private final RefreshTokenService refreshTokenService;
     private final UserRepository userRepository;
+    @NonNull private final String frontendUrl;
+    @NonNull private final String oauth2CallbackPath;
 
-    public OAuth2LoginSuccessHandler(JwtService jwtService, RefreshTokenService refreshTokenService, UserRepository userRepository) {
+    public OAuth2LoginSuccessHandler(JwtService jwtService,
+                                     RefreshTokenService refreshTokenService,
+                                     UserRepository userRepository,
+                                     @NonNull @Value("${FRONTEND_URL:http://localhost:5173}") String frontendUrl,
+                                     @NonNull @Value("${FRONTEND_OAUTH2_CALLBACK_PATH:/oauth2/callback}") String oauth2CallbackPath) {
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.userRepository = userRepository;
+        this.frontendUrl = Objects.requireNonNull(frontendUrl, "frontendUrl must not be null");
+        this.oauth2CallbackPath = Objects.requireNonNull(oauth2CallbackPath, "oauth2CallbackPath must not be null");
     }
 
     @Override
@@ -39,20 +50,24 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
             OAuth2User oauthUser = oauthToken.getPrincipal();
             Map<String, Object> attributes = oauthUser.getAttributes();
 
-            String email = (String) attributes.get("email");
-            String username = (String) attributes.get("name");
+            Object emailObj = attributes.get("email");
+            String email = emailObj != null ? emailObj.toString() : null;
+            Object nameObj = attributes.get("name");
+            String username = nameObj != null ? nameObj.toString() : null;
             String providerId = oauthUser.getName(); // Unique provider user ID
 
             if (email == null) {
                 // For GitHub, email might be in a different attribute or null, use providerId or login name
-                String login = (String) attributes.get("login");
+                Object loginObj = attributes.get("login");
+                String login = loginObj != null ? loginObj.toString() : null;
                 email = login != null ? login + "@github.com" : providerId + "@github.com";
             }
 
             if (username == null) {
-                username = (String) attributes.get("login");
+                Object loginObj = attributes.get("login");
+                username = loginObj != null ? loginObj.toString() : null;
                 if (username == null) {
-                    username = email.split("@")[0];
+                    username = email != null ? email.split("@")[0] : providerId;
                 }
             }
 
@@ -83,7 +98,8 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
             var refresh = refreshTokenService.createRefreshToken(user, ipAddress, userAgent);
 
             // Redirect back to React frontend
-            String targetUrl = UriComponentsBuilder.fromUriString("http://localhost:5173/oauth2/callback")
+            String targetUrl = UriComponentsBuilder.fromUriString(frontendUrl)
+                    .path(oauth2CallbackPath)
                     .queryParam("token", accessToken)
                     .queryParam("refreshToken", refresh.getToken())
                     .build().toUriString();
@@ -97,7 +113,13 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     private String getClientIpAddress(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
+            String[] ips = xForwardedFor.split(",");
+            if (ips.length > 0) {
+                String trimmedIp = ips[0].trim();
+                if (!trimmedIp.isEmpty()) {
+                    return trimmedIp;
+                }
+            }
         }
         return request.getRemoteAddr();
     }
