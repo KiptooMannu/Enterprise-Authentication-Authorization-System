@@ -98,7 +98,7 @@ public class SecurityConfig {
         if (allowedOrigins == null || allowedOrigins.isBlank()) {
             allowedOrigins = env.getProperty("FRONTEND_URL");
             if (allowedOrigins == null || allowedOrigins.isBlank()) {
-                allowedOrigins = "http://localhost:5173";
+                allowedOrigins = "*";
             }
         }
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {

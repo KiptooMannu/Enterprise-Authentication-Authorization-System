@@ -1,0 +1,3 @@
+-- Add MFA columns to users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(255);
