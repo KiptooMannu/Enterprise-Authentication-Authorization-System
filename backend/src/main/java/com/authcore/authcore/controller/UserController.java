@@ -2,11 +2,13 @@ package com.authcore.authcore.controller;
 
 import com.authcore.authcore.dto.ChangePasswordRequest;
 import com.authcore.authcore.dto.LoginRequest;
+import com.authcore.authcore.dto.LoginResponse;
 import com.authcore.authcore.dto.UserRegistrationRequest;
 import com.authcore.authcore.dto.UserResponse;
 import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.security.AuthResponse;
 import com.authcore.authcore.security.JwtService;
+import com.authcore.authcore.service.MfaService;
 import com.authcore.authcore.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -29,13 +31,15 @@ public class UserController {
     private final com.authcore.authcore.service.RefreshTokenService refreshTokenService;
     private final com.authcore.authcore.service.PasswordResetService passwordResetService;
     private final com.authcore.authcore.service.AuditLogService auditLogService;
+    private final MfaService mfaService;
 
-    public UserController(UserService userService, JwtService jwtService, com.authcore.authcore.service.RefreshTokenService refreshTokenService, com.authcore.authcore.service.PasswordResetService passwordResetService, com.authcore.authcore.service.AuditLogService auditLogService) {
+    public UserController(UserService userService, JwtService jwtService, com.authcore.authcore.service.RefreshTokenService refreshTokenService, com.authcore.authcore.service.PasswordResetService passwordResetService, com.authcore.authcore.service.AuditLogService auditLogService, MfaService mfaService) {
         this.userService = userService;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.passwordResetService = passwordResetService;
         this.auditLogService = auditLogService;
+        this.mfaService = mfaService;
     }
 
     @PostMapping("/register")
@@ -48,14 +52,23 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public AuthResponse login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         UserEntity user = userService.authenticateUser(request);
-        String token = jwtService.generateToken(user.getEmail());
         String ipAddress = getClientIpAddress(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
+
+        // Check if MFA is enabled
+        if (mfaService.isEnabled(user)) {
+            String challengeToken = mfaService.createLoginChallenge(user);
+            auditLogService.logEvent(user, "USER_LOGIN_MFA_REQUIRED", "User", user.getId(), ipAddress, "MFA required for login");
+            return ResponseEntity.ok(LoginResponse.mfaRequired(challengeToken));
+        }
+
+        // Normal login flow
+        String token = jwtService.generateToken(user.getEmail());
         var refresh = refreshTokenService.createRefreshToken(user, ipAddress, userAgent);
         auditLogService.logEvent(user, "USER_LOGIN", "User", user.getId(), ipAddress, "User logged in successfully");
-        return new AuthResponse(token, refresh.getToken(), "success");
+        return ResponseEntity.ok(new AuthResponse(token, refresh.getToken(), "success"));
     }
 
     @GetMapping("/me")

@@ -19,12 +19,14 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
     private final LoginAttemptService loginAttemptService;
+    private final com.authcore.authcore.repository.MfaChallengeRepository mfaChallengeRepository;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmailVerificationService emailVerificationService, LoginAttemptService loginAttemptService) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, EmailVerificationService emailVerificationService, LoginAttemptService loginAttemptService, com.authcore.authcore.repository.MfaChallengeRepository mfaChallengeRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailVerificationService = emailVerificationService;
         this.loginAttemptService = loginAttemptService;
+        this.mfaChallengeRepository = mfaChallengeRepository;
     }
 
     public UserEntity registerUser(UserRegistrationRequest request) {
@@ -108,5 +110,13 @@ public class UserService {
 
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         return userRepository.save(user);
+    }
+
+    @Transactional
+    public void deleteUser(Long id) {
+        UserEntity user = findById(id);
+        // Clean up MFA challenges to avoid foreign key violations
+        mfaChallengeRepository.deleteByUser(user);
+        userRepository.delete(user);
     }
 }
