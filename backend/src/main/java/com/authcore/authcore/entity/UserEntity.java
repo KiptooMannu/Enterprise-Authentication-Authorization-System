@@ -38,11 +38,12 @@ public class UserEntity {
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    @Column(nullable = false)
+    @JsonIgnore
+    @Column(name = "mfa_enabled", nullable = false)
     private boolean mfaEnabled = false;
 
     @JsonIgnore
-    @Column(nullable = true)
+    @Column(name = "mfa_secret", nullable = true)
     private String mfaSecret;
 
     public UserEntity() {

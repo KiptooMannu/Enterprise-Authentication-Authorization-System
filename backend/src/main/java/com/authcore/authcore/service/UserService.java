@@ -6,6 +6,7 @@ import com.authcore.authcore.dto.UserRegistrationRequest;
 import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.entity.UserRole;
 import com.authcore.authcore.repository.UserRepository;
+import org.springframework.lang.NonNull;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -79,6 +80,7 @@ public class UserService {
         return userRepository.findAll();
     }
 
+    @NonNull
     public UserEntity findById(Long id) {
         if (id == null) {
             throw new IllegalArgumentException("User ID cannot be null");
