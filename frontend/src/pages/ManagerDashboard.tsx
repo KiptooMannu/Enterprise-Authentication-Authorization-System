@@ -5,9 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
-import { 
-  Users, BarChart3, TrendingUp, Calendar, Clock, CheckCircle2, AlertTriangle,
-  LogOut, Settings, UserCheck, FileText, Activity, ArrowLeft, Shield
+import {
+  Users, BarChart3, TrendingUp, AlertTriangle,
+  LogOut, Settings, UserCheck, FileText, Activity, Shield, Calendar, Clock
 } from 'lucide-react'
 
 interface TeamMember {
@@ -31,20 +31,13 @@ const ManagerDashboard: React.FC = () => {
   const { user, logout } = useAuth()
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([])
   const [activities, setActivities] = useState<ActivityReport[]>([])
-  const [loading, setLoading] = useState(true)
+  const [, setLoading] = useState(true)
 
   useEffect(() => {
-    // Mock data - in production, fetch from API
-    setTeamMembers([
-      { id: 1, username: 'john_doe', email: 'john@example.com', role: 'USER', status: 'Active', lastActive: '2 hours ago' },
-      { id: 2, username: 'jane_smith', email: 'jane@example.com', role: 'USER', status: 'Active', lastActive: '5 hours ago' },
-      { id: 3, username: 'bob_wilson', email: 'bob@example.com', role: 'MODERATOR', status: 'Active', lastActive: '1 day ago' },
-    ])
-    setActivities([
-      { id: 1, action: 'Login', user: 'john_doe', timestamp: '2 hours ago', status: 'Success' },
-      { id: 2, action: 'Password Change', user: 'jane_smith', timestamp: '5 hours ago', status: 'Success' },
-      { id: 3, action: 'Failed Login', user: 'unknown', timestamp: '6 hours ago', status: 'Failed' },
-    ])
+    // Manager dashboard endpoints not yet implemented
+    // Remove mock data - no real backend support for team management
+    setTeamMembers([])
+    setActivities([])
     setLoading(false)
   }, [])
 
@@ -222,19 +215,19 @@ const ManagerDashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" disabled title="Not yet implemented">
                 <UserCheck className="h-4 w-4 mr-2" />
                 Add Team Member
               </Button>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" disabled title="Not yet implemented">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 View Reports
               </Button>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" disabled title="Not yet implemented">
                 <Calendar className="h-4 w-4 mr-2" />
                 Schedule Review
               </Button>
-              <Button variant="outline" className="justify-start">
+              <Button variant="outline" className="justify-start" disabled title="Not yet implemented">
                 <Clock className="h-4 w-4 mr-2" />
                 Activity Timeline
               </Button>

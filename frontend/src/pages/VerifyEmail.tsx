@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
-import axios from 'axios'
+import { authApi } from '../services/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
@@ -21,7 +21,7 @@ const VerifyEmail: React.FC = () => {
       }
 
       try {
-        const response = await axios.get(`/api/auth/verify-email?token=${token}`)
+        const response = await authApi.verifyEmail(token)
         setStatus('success')
         setMessage(response.data.message || 'Your email address has been verified successfully.')
       } catch (error: any) {

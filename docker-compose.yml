@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: authcore-postgres
+    environment:
+      POSTGRES_DB: authcore_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - authcore-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d authcore_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API (Spring Boot)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: authcore-backend
+    environment:
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/authcore_db}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-postgres}
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: ${SPRING_DATASOURCE_DRIVER_CLASS_NAME}
+      SPRING_JPA_DATABASE_PLATFORM: ${SPRING_JPA_DATABASE_PLATFORM}
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO}
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL}
+      SPRING_JPA_FORMAT_SQL: ${SPRING_JPA_FORMAT_SQL}
+      SPRING_MAIL_HOST: ${SPRING_MAIL_HOST}
+      SPRING_MAIL_PORT: ${SPRING_MAIL_PORT}
+      SPRING_MAIL_USERNAME: ${SPRING_MAIL_USERNAME}
+      SPRING_MAIL_PASSWORD: ${SPRING_MAIL_PASSWORD}
+      SPRING_MAIL_SMTP_AUTH: ${SPRING_MAIL_SMTP_AUTH}
+      SPRING_MAIL_STARTTLS_ENABLE: ${SPRING_MAIL_STARTTLS_ENABLE}
+      OAUTH2_GOOGLE_CLIENT_ID: ${OAUTH2_GOOGLE_CLIENT_ID}
+      OAUTH2_GOOGLE_CLIENT_SECRET: ${OAUTH2_GOOGLE_CLIENT_SECRET}
+      OAUTH2_GOOGLE_SCOPE: ${OAUTH2_GOOGLE_SCOPE}
+      OAUTH2_GITHUB_CLIENT_ID: ${OAUTH2_GITHUB_CLIENT_ID}
+      OAUTH2_GITHUB_CLIENT_SECRET: ${OAUTH2_GITHUB_CLIENT_SECRET}
+      OAUTH2_GITHUB_SCOPE: ${OAUTH2_GITHUB_SCOPE}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      REFRESH_TOKEN_EXPIRATION: ${REFRESH_TOKEN_EXPIRATION}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - authcore-network
+    volumes:
+      - ./backend:/app
+      - /app/target
+
+  # Frontend (React + Vite)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: authcore-frontend
+    environment:
+      VITE_API_URL: ${VITE_API_URL}
+      VITE_OAUTH2_GOOGLE_CLIENT_ID: ${VITE_OAUTH2_GOOGLE_CLIENT_ID}
+      VITE_OAUTH2_GOOGLE_REDIRECT_URI: ${VITE_OAUTH2_GOOGLE_REDIRECT_URI}
+      VITE_OAUTH2_GITHUB_CLIENT_ID: ${VITE_OAUTH2_GITHUB_CLIENT_ID}
+      VITE_OAUTH2_GITHUB_REDIRECT_URI: ${VITE_OAUTH2_GITHUB_REDIRECT_URI}
+      VITE_APP_ENV: ${VITE_APP_ENV}
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - authcore-network
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/dist
+
+  # Redis for caching (optional - for token caching and session management)
+  redis:
+    image: redis:7-alpine
+    container_name: authcore-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - authcore-network
+    command: redis-server --appendonly yes
+
+networks:
+  authcore-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

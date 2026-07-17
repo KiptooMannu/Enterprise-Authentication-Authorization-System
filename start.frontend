@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# start.frontend - start the frontend in dev or prod mode
+# Usage:
+#   ./start.frontend         # dev (vite)
+#   ./start.frontend dev     # dev (vite)
+#   ./start.frontend prod    # build and preview (vite preview)
+#   ./start.frontend yarn    # use yarn instead of pnpm/npm
+
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODE="${1:-dev}"
+PKG_MANAGER="pnpm"
+
+if [ "$MODE" = "yarn" ] || [ "$MODE" = "npm" ] || [ "$MODE" = "pnpm" ]; then
+  PKG_MANAGER="$MODE"
+  MODE="dev"
+fi
+
+cd "$SCRIPT_DIR/frontend" || exit 1
+
+if [ "$MODE" = "dev" ]; then
+  if command -v $PKG_MANAGER >/dev/null 2>&1; then
+    echo "Starting frontend in dev mode with $PKG_MANAGER..."
+    $PKG_MANAGER run dev
+  else
+    echo "$PKG_MANAGER not found; try pnpm, npm or yarn"
+    exit 1
+  fi
+  exit $?
+fi
+
+if [ "$MODE" = "prod" ]; then
+  if command -v $PKG_MANAGER >/dev/null 2>&1; then
+    echo "Building frontend for production with $PKG_MANAGER..."
+    $PKG_MANAGER run build
+    echo "Previewing production build..."
+    $PKG_MANAGER run preview
+  else
+    echo "$PKG_MANAGER not found; try pnpm, npm or yarn"
+    exit 1
+  fi
+  exit $?
+fi
+
+echo "Unknown mode: $MODE"
+echo "Usage: ./start.frontend [dev|prod|pnpm|npm|yarn]"
+exit 2

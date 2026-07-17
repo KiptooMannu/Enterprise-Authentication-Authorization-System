@@ -4,8 +4,8 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
-import { 
-  User, Mail, Phone, MapPin, Calendar, Shield, Key, Bell, 
+import {
+  User, Mail, Phone, MapPin, Shield, Key, Bell,
   Globe, Camera, CheckCircle2, AlertCircle, Save, X, Edit
 } from 'lucide-react'
 
@@ -30,11 +30,8 @@ const ProfileManagement: React.FC = () => {
     setError('')
     setSuccess('')
     
-    // Simulate API call
-    setTimeout(() => {
-      setSuccess('Profile updated successfully!')
-      setIsEditing(false)
-    }, 1000)
+    // Profile update endpoint not yet implemented
+    setError('Profile update is not yet available. Please contact administrator.')
   }
 
   const handleCancel = () => {
@@ -85,7 +82,7 @@ const ProfileManagement: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-center">
-                <Button variant="outline" size="sm" className="w-full">
+                <Button variant="outline" size="sm" className="w-full" disabled title="Not yet implemented">
                   <Camera className="h-4 w-4 mr-2" />
                   Change Avatar
                 </Button>
@@ -227,7 +224,7 @@ const ProfileManagement: React.FC = () => {
                   <p className="text-sm text-muted-foreground">Update your password regularly</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm">Change</Button>
+              <Button variant="outline" size="sm" disabled title="Use Dashboard instead">Change</Button>
             </div>
 
             <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -238,7 +235,7 @@ const ProfileManagement: React.FC = () => {
                   <p className="text-sm text-muted-foreground">Add an extra layer of security</p>
                 </div>
               </div>
-              <Badge variant="outline">Not Enabled</Badge>
+              <Badge variant="outline">Not Available</Badge>
             </div>
 
             <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -249,7 +246,7 @@ const ProfileManagement: React.FC = () => {
                   <p className="text-sm text-muted-foreground">Manage your logged-in devices</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm">View Sessions</Button>
+              <Button variant="outline" size="sm" disabled title="Use Dashboard instead">View Sessions</Button>
             </div>
           </CardContent>
         </Card>
@@ -301,14 +298,14 @@ const ProfileManagement: React.FC = () => {
                   <p className="font-medium">Email Notifications</p>
                   <p className="text-sm text-muted-foreground">Receive security alerts via email</p>
                 </div>
-                <Button variant="outline" size="sm">Configure</Button>
+                <Button variant="outline" size="sm" disabled title="Not yet implemented">Configure</Button>
               </div>
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium">Login Alerts</p>
                   <p className="text-sm text-muted-foreground">Get notified of new sign-ins</p>
                 </div>
-                <Button variant="outline" size="sm">Configure</Button>
+                <Button variant="outline" size="sm" disabled title="Not yet implemented">Configure</Button>
               </div>
             </div>
           </CardContent>

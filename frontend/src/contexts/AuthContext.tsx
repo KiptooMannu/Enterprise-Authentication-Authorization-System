@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { authApi } from '../services/api'
+import { authApi, mfaApi } from '../services/api'
 
 interface User {
   id: number
@@ -13,7 +13,8 @@ interface User {
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<{ mfaRequired: boolean; mfaChallengeToken?: string }>
+  verifyMfaLogin: (challengeToken: string, code: string) => Promise<void>
   register: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
   logoutAll: () => Promise<void>
@@ -46,10 +47,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const response = await authApi.login(email, password)
+    const data = response.data
+
+    // Check if MFA is required
+    if (data.mfaRequired) {
+      return { mfaRequired: true, mfaChallengeToken: data.mfaChallengeToken }
+    }
+
+    // Normal login flow
+    const { token, refreshToken } = data
+    localStorage.setItem('accessToken', token)
+    localStorage.setItem('refreshToken', refreshToken)
+
+    const userResponse = await authApi.getMe()
+    setUser(userResponse.data)
+    return { mfaRequired: false }
+  }
+
+  const verifyMfaLogin = async (challengeToken: string, code: string) => {
+    const response = await mfaApi.loginVerify(challengeToken, code)
     const { token, refreshToken } = response.data
     localStorage.setItem('accessToken', token)
     localStorage.setItem('refreshToken', refreshToken)
-    
+
     const userResponse = await authApi.getMe()
     setUser(userResponse.data)
   }
@@ -78,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     user,
     loading,
     login,
+    verifyMfaLogin,
     register,
     logout,
     logoutAll,

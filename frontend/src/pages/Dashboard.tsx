@@ -5,8 +5,8 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { LogOut, User, Shield, Clock, Globe, Key, FileText, CheckCircle2, AlertCircle, X, ShieldCheck } from 'lucide-react'
-import axios from 'axios'
-import api, { sessionApi, oauthApi, authApi } from '../services/api'
+import { sessionApi, oauthApi, authApi } from '../services/api'
+import config from '../config/env'
 
 
 interface Session {
@@ -113,7 +113,7 @@ const Dashboard: React.FC = () => {
     setError('')
     setLoading(true)
     try {
-      const logsRes = await api.get('/users/audit-logs')
+      const logsRes = await authApi.getMyAuditLogs()
       setLogs(logsRes.data)
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load login history.')
@@ -451,7 +451,7 @@ const Dashboard: React.FC = () => {
                       Unlink
                     </Button>
                   ) : (
-                    <Button variant="outline" size="sm" onClick={() => window.location.href = 'http://localhost:8080/oauth2/authorization/google'}>
+                    <Button variant="outline" size="sm" onClick={() => window.location.href = `${config.oauthBaseUrl}/oauth2/authorization/google`}>
                       Link
                     </Button>
                   )}
@@ -470,7 +470,7 @@ const Dashboard: React.FC = () => {
                       Unlink
                     </Button>
                   ) : (
-                    <Button variant="outline" size="sm" onClick={() => window.location.href = 'http://localhost:8080/oauth2/authorization/github'}>
+                    <Button variant="outline" size="sm" onClick={() => window.location.href = `${config.oauthBaseUrl}/oauth2/authorization/github`}>
                       Link
                     </Button>
                   )}

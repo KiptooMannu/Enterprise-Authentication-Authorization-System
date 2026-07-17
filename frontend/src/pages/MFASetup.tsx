@@ -1,33 +1,36 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
+import { mfaApi } from '../services/api'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Badge } from '../components/ui/badge'
-import { 
-  Shield, Smartphone, QrCode, Key, CheckCircle2, AlertCircle, 
-  ArrowLeft, Copy, RefreshCw, Lock, Fingerprint
+import {
+  Shield, Smartphone, QrCode, Key, CheckCircle2, ArrowLeft, Copy,
+  AlertCircle, Lock
 } from 'lucide-react'
 
 const MFASetup: React.FC = () => {
-  const { user } = useAuth()
   const navigate = useNavigate()
   const [step, setStep] = useState<'intro' | 'setup' | 'verify' | 'complete'>('intro')
-  const [method, setMethod] = useState<'totp' | 'sms' | 'email'>('totp')
-  const [secret, setSecret] = useState('JBSWY3DPEHPK3PXP')
+  const [secret, setSecret] = useState('')
+  const [otpAuthUri, setOtpAuthUri] = useState('')
   const [verificationCode, setVerificationCode] = useState('')
-  const [phoneNumber, setPhoneNumber] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleMethodSelect = (selectedMethod: 'totp' | 'sms' | 'email') => {
-    setMethod(selectedMethod)
-    setStep('setup')
-  }
-
-  const handleSetupComplete = () => {
-    setStep('verify')
+  const handleSetupStart = async () => {
+    setError('')
+    setLoading(true)
+    try {
+      const response = await mfaApi.setup()
+      setSecret(response.data.secret)
+      setOtpAuthUri(response.data.otpAuthUri)
+      setStep('setup')
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to start MFA setup')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleVerify = async (e: React.FormEvent) => {
@@ -35,15 +38,14 @@ const MFASetup: React.FC = () => {
     setError('')
     setLoading(true)
 
-    // Simulate verification
-    setTimeout(() => {
-      if (verificationCode === '123456') {
-        setStep('complete')
-      } else {
-        setError('Invalid verification code. Please try again.')
-      }
+    try {
+      await mfaApi.verify(verificationCode)
+      setStep('complete')
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Invalid verification code')
+    } finally {
       setLoading(false)
-    }, 1000)
+    }
   }
 
   const handleSkip = () => {
@@ -52,6 +54,10 @@ const MFASetup: React.FC = () => {
 
   const handleComplete = () => {
     navigate('/dashboard')
+  }
+
+  const copySecret = () => {
+    navigator.clipboard.writeText(secret)
   }
 
   return (
@@ -76,67 +82,28 @@ const MFASetup: React.FC = () => {
         {step === 'intro' && (
           <Card>
             <CardHeader>
-              <CardTitle>Choose Your Authentication Method</CardTitle>
-              <CardDescription>Select how you want to receive your verification codes</CardDescription>
+              <CardTitle>Set Up Two-Factor Authentication</CardTitle>
+              <CardDescription>Add an extra layer of security to your account using an authenticator app</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div 
-                className="border-2 rounded-lg p-6 cursor-pointer hover:border-purple-500 transition-colors"
-                onClick={() => handleMethodSelect('totp')}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
-                    <Smartphone className="h-6 w-6 text-purple-600" />
-                  </div>
-                  <div className="flex-1">
+              <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-6 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Smartphone className="h-5 w-5 text-purple-600 mt-0.5" />
+                  <div>
                     <h3 className="font-semibold mb-1">Authenticator App</h3>
                     <p className="text-sm text-muted-foreground">
-                      Use an authenticator app like Google Authenticator or Authy to generate codes
+                      Use an authenticator app like Google Authenticator, Authy, or Microsoft Authenticator to generate time-based codes
                     </p>
                   </div>
-                  <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-                </div>
-              </div>
-
-              <div 
-                className="border-2 rounded-lg p-6 cursor-pointer hover:border-purple-500 transition-colors"
-                onClick={() => handleMethodSelect('sms')}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                    <Smartphone className="h-6 w-6 text-blue-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold mb-1">SMS Text Message</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Receive verification codes via text message to your phone
-                    </p>
-                  </div>
-                  <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
-                </div>
-              </div>
-
-              <div 
-                className="border-2 rounded-lg p-6 cursor-pointer hover:border-purple-500 transition-colors"
-                onClick={() => handleMethodSelect('email')}
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                    <Key className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold mb-1">Email</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Receive verification codes via email to your registered address
-                    </p>
-                  </div>
-                  <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
                 </div>
               </div>
 
               <div className="flex gap-3 pt-4">
                 <Button variant="outline" onClick={handleSkip} className="flex-1">
                   Skip for Now
+                </Button>
+                <Button onClick={handleSetupStart} className="flex-1" disabled={loading}>
+                  {loading ? 'Initializing...' : 'Get Started'}
                 </Button>
               </div>
             </CardContent>
@@ -147,79 +114,42 @@ const MFASetup: React.FC = () => {
         {step === 'setup' && (
           <Card>
             <CardHeader>
-              <CardTitle>Setup {method === 'totp' ? 'Authenticator App' : method === 'sms' ? 'SMS' : 'Email'}</CardTitle>
-              <CardDescription>Follow these steps to configure your authentication method</CardDescription>
+              <CardTitle>Scan QR Code</CardTitle>
+              <CardDescription>Scan this QR code with your authenticator app</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {method === 'totp' && (
-                <>
-                  <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <QrCode className="h-5 w-5" />
-                      <span>Step 1: Scan QR Code</span>
-                    </div>
-                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg flex items-center justify-center">
-                      <div className="w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
-                        <QrCode className="h-24 w-24 text-gray-400" />
-                      </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Scan this QR code with your authenticator app
-                    </p>
-                  </div>
-
-                  <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <Key className="h-5 w-5" />
-                      <span>Step 2: Enter Secret Key (if you can't scan)</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Input value={secret} readOnly className="font-mono" />
-                      <Button variant="outline" size="icon">
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {method === 'sms' && (
-                <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Smartphone className="h-5 w-5" />
-                    <span>Enter Your Phone Number</span>
-                  </div>
-                  <Input
-                    type="tel"
-                    placeholder="+1 (555) 000-0000"
-                    value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value)}
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-lg flex items-center justify-center">
+                {otpAuthUri ? (
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpAuthUri)}`}
+                    alt="QR Code"
+                    className="w-48 h-48"
                   />
-                  <p className="text-sm text-muted-foreground">
-                    We'll send a verification code to this number
-                  </p>
-                </div>
-              )}
+                ) : (
+                  <div className="w-48 h-48 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center">
+                    <QrCode className="h-24 w-24 text-gray-400" />
+                  </div>
+                )}
+              </div>
 
-              {method === 'email' && (
-                <div className="bg-muted/50 rounded-lg p-6 space-y-4">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <Key className="h-5 w-5" />
-                    <span>Verification Email</span>
-                  </div>
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <p className="text-sm">
-                      A verification code will be sent to: <strong>{user?.email}</strong>
-                    </p>
-                  </div>
+              <div className="bg-muted/50 rounded-lg p-6 space-y-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Key className="h-5 w-5" />
+                  <span>Or enter this secret key manually</span>
                 </div>
-              )}
+                <div className="flex gap-2">
+                  <Input value={secret} readOnly className="font-mono text-sm" />
+                  <Button variant="outline" size="icon" onClick={copySecret}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => setStep('intro')} className="flex-1">
                   Back
                 </Button>
-                <Button onClick={handleSetupComplete} className="flex-1">
+                <Button onClick={() => setStep('verify')} className="flex-1">
                   Continue
                 </Button>
               </div>
@@ -232,7 +162,7 @@ const MFASetup: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>Verify Your Setup</CardTitle>
-              <CardDescription>Enter the verification code to complete setup</CardDescription>
+              <CardDescription>Enter the verification code from your authenticator app</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {error && (
@@ -255,7 +185,7 @@ const MFASetup: React.FC = () => {
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    Enter the 6-digit code from your {method === 'totp' ? 'authenticator app' : method === 'sms' ? 'SMS' : 'email'}
+                    Enter the 6-digit code from your authenticator app
                   </p>
                 </div>
 
@@ -268,13 +198,6 @@ const MFASetup: React.FC = () => {
                   </Button>
                 </div>
               </form>
-
-              <div className="text-center">
-                <Button variant="ghost" size="sm" type="button">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Resend Code
-                </Button>
-              </div>
             </CardContent>
           </Card>
         )}
@@ -288,7 +211,7 @@ const MFASetup: React.FC = () => {
               </div>
               <CardTitle>MFA Setup Complete!</CardTitle>
               <CardDescription>
-                Your account is now protected with multi-factor authentication
+                Your account is now protected with two-factor authentication
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -298,25 +221,8 @@ const MFASetup: React.FC = () => {
                   <span className="font-medium">Enhanced Security</span>
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Your account now requires an additional verification code when signing in
+                  Your account now requires a verification code from your authenticator app when signing in
                 </p>
-              </div>
-
-              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 space-y-2">
-                <div className="flex items-center gap-2 text-sm">
-                  <Fingerprint className="h-4 w-4 text-blue-600" />
-                  <span className="font-medium">Backup Codes</span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Save these backup codes in case you lose access to your authentication method
-                </p>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  {['123456', '789012', '345678', '901234', '567890', '123456'].map((code, i) => (
-                    <div key={i} className="bg-white dark:bg-gray-800 p-2 rounded text-center font-mono text-sm">
-                      {code}
-                    </div>
-                  ))}
-                </div>
               </div>
 
               <Button onClick={handleComplete} className="w-full">

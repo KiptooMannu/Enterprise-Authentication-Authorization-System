@@ -54,27 +54,37 @@ api.interceptors.response.use(
 export const authApi = {
   login: (email: string, password: string) =>
     api.post('/users/login', { email, password }),
-  
+
   register: (username: string, email: string, password: string) =>
     api.post('/users/register', { username, email, password }),
-  
+
   logout: () => api.post('/auth/logout'),
-  
+
   logoutAll: () => api.post('/auth/logout-all'),
-  
+
   refreshToken: (refreshToken: string) =>
     api.post('/auth/refresh', { refreshToken }),
-  
+
   getMe: () => api.get('/users/me'),
-  
+
   changePassword: (currentPassword: string, newPassword: string) =>
     api.post('/users/change-password', { currentPassword, newPassword }),
-  
+
   forgotPassword: (email: string) =>
     api.post('/users/forgot-password', { email }),
-  
+
   resetPassword: (token: string, newPassword: string) =>
     api.post('/users/reset-password', { token, newPassword }),
+
+  resendVerification: (email: string) =>
+    api.post('/auth/resend-verification', { email }),
+
+  verifyEmail: (token: string) => api.get('/auth/verify-email', { params: { token } }),
+
+  revoke: (token: string, type: 'access' | 'refresh') =>
+    api.post('/auth/revoke', { token, type }),
+
+  getMyAuditLogs: () => api.get('/users/audit-logs'),
 }
 
 export const sessionApi = {
@@ -87,13 +97,45 @@ export const sessionApi = {
 }
 
 export const oauthApi = {
-  oauthCallback: (provider: string, data: any) =>
-    api.post(`/oauth2/callback/${provider}`, data),
-  
   getLinkedAccounts: () => api.get('/oauth2/accounts'),
-  
+
   unlinkAccount: (provider: string) =>
     api.delete(`/oauth2/unlink/${provider}`),
+}
+
+export const mfaApi = {
+  getStatus: () => api.get('/mfa/status'),
+
+  setup: () => api.post('/mfa/setup'),
+
+  verify: (code: string) => api.post('/mfa/verify', { code }),
+
+  disable: (code: string) => api.post('/mfa/disable', { code }),
+
+  loginVerify: (challengeToken: string, code: string) =>
+    api.post('/mfa/login-verify', { challengeToken, code }),
+}
+
+export const adminApi = {
+  listUsers: () => api.get('/admin/users'),
+
+  updateRole: (id: number, role: string) =>
+    api.put(`/admin/users/${id}/role`, null, { params: { role } }),
+
+  updateStatus: (id: number, enabled: boolean) =>
+    api.put(`/admin/users/${id}/status`, null, { params: { enabled } }),
+
+  getAuditLogs: () => api.get('/admin/audit-logs'),
+
+  getUserAuditLogs: (userId: number) => api.get(`/admin/audit-logs/user/${userId}`),
+}
+
+export const protectedApi = {
+  me: () => api.get('/protected/me'),
+
+  adminCheck: () => api.get('/protected/admin'),
+
+  managerCheck: () => api.get('/protected/manager'),
 }
 
 export default api

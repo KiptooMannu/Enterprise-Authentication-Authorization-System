@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import config from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Lock, Mail, AlertCircle } from 'lucide-react'
+import { Lock, Mail, AlertCircle, Shield } from 'lucide-react'
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [mfaCode, setMfaCode] = useState('')
   const [error, setError] = useState('')
   const [rememberMe, setRememberMe] = useState(false)
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const [mfaRequired, setMfaRequired] = useState(false)
+  const [mfaChallengeToken, setMfaChallengeToken] = useState('')
+  const { login, verifyMfaLogin } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -29,7 +33,7 @@ const Login: React.FC = () => {
       setError('Network error: No internet connection. Please check your network and try again.')
       return
     }
-    window.location.href = `http://localhost:8080/oauth2/authorization/${provider}`
+    window.location.href = `${config.oauthBaseUrl}/oauth2/authorization/${provider}`
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,13 +48,31 @@ const Login: React.FC = () => {
     setLoading(true)
 
     try {
-      await login(email, password)
-      if (rememberMe) {
-        localStorage.setItem('rememberedEmail', email)
+      if (mfaRequired) {
+        // Verify MFA code
+        await verifyMfaLogin(mfaChallengeToken, mfaCode)
+        if (rememberMe) {
+          localStorage.setItem('rememberedEmail', email)
+        } else {
+          localStorage.removeItem('rememberedEmail')
+        }
+        navigate('/dashboard')
       } else {
-        localStorage.removeItem('rememberedEmail')
+        // First step: password authentication
+        const result = await login(email, password)
+        if (result.mfaRequired) {
+          setMfaRequired(true)
+          setMfaChallengeToken(result.mfaChallengeToken || '')
+          setError('')
+        } else {
+          if (rememberMe) {
+            localStorage.setItem('rememberedEmail', email)
+          } else {
+            localStorage.removeItem('rememberedEmail')
+          }
+          navigate('/dashboard')
+        }
       }
-      navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed. Please try again.')
     } finally {
@@ -121,6 +143,30 @@ const Login: React.FC = () => {
               </div>
             </div>
 
+            {mfaRequired && (
+              <div className="space-y-2">
+                <label htmlFor="mfaCode" className="text-sm font-medium">
+                  Two-Factor Authentication Code
+                </label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="mfaCode"
+                    type="text"
+                    placeholder="123456"
+                    value={mfaCode}
+                    onChange={(e) => setMfaCode(e.target.value)}
+                    className="pl-10"
+                    maxLength={6}
+                    required
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Enter the 6-digit code from your authenticator app
+                </p>
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -135,7 +181,7 @@ const Login: React.FC = () => {
             </div>
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? (mfaRequired ? 'Verifying...' : 'Signing in...') : (mfaRequired ? 'Verify Code' : 'Sign in')}
             </Button>
 
             <div className="relative my-4">

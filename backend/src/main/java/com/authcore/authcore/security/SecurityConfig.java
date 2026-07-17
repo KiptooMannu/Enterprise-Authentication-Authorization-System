@@ -37,7 +37,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter, OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler, Environment env) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationFilter jwtAuthenticationFilter, Environment env) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource(env)))
             .csrf(csrf -> csrf.disable())
@@ -53,9 +53,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/protected/manager").hasAnyRole("MANAGER", "ADMIN")
                 .anyRequest().authenticated())
             .sessionManagement(sm -> sm.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS))
-            .oauth2Login(oauth2 -> oauth2
-                .successHandler(oAuth2LoginSuccessHandler)
-            )
             .exceptionHandling(eh -> eh
                 .authenticationEntryPoint(new org.springframework.security.web.authentication.HttpStatusEntryPoint(org.springframework.http.HttpStatus.UNAUTHORIZED))
                 .accessDeniedHandler((request, response, accessDeniedException) -> {

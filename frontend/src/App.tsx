@@ -11,9 +11,8 @@ import OAuthCallback from './pages/OAuthCallback'
 import AdminDashboard from './pages/AdminDashboard'
 import ManagerDashboard from './pages/ManagerDashboard'
 import AccessDenied from './pages/AccessDenied'
-import MFASetup from './pages/MFASetup'
 import ProfileManagement from './pages/ProfileManagement'
-import WebAuthnSetup from './pages/WebAuthnSetup'
+import MFASetup from './pages/MFASetup'
 
 function App() {
   return (
@@ -51,14 +50,6 @@ function App() {
             } 
           />
           <Route 
-            path="/mfa-setup" 
-            element={
-              <ProtectedRoute>
-                <MFASetup />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
             path="/profile" 
             element={
               <ProtectedRoute>
@@ -67,10 +58,10 @@ function App() {
             } 
           />
           <Route 
-            path="/webauthn" 
+            path="/mfa-setup" 
             element={
               <ProtectedRoute>
-                <WebAuthnSetup />
+                <MFASetup />
               </ProtectedRoute>
             } 
           />

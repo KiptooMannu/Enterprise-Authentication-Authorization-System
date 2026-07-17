@@ -126,7 +126,7 @@ export const SecurityIncidentsChart: React.FC = () => (
             fill="#8884d8"
             dataKey="value"
           >
-            {securityIncidentsData.map((entry, index) => (
+            {securityIncidentsData.map((_, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
@@ -177,7 +177,7 @@ export const RoleDistributionChart: React.FC = () => (
             fill="#8884d8"
             dataKey="value"
           >
-            {roleDistributionData.map((entry, index) => (
+            {roleDistributionData.map((_, index) => (
               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>

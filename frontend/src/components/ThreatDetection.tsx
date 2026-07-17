@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
-import { 
-  AlertTriangle, Shield, Activity, Globe, Lock, Eye, EyeOff, 
-  TrendingUp, CheckCircle2, XCircle, Clock, MapPin, User, 
-  RefreshCw, Filter, Download, AlertCircle
+import {
+  AlertTriangle, Shield, Activity, Lock, Eye, EyeOff,
+  CheckCircle2, XCircle, MapPin, RefreshCw, AlertCircle,
+  User, Globe, Clock, TrendingUp
 } from 'lucide-react'
 
 interface ThreatEvent {

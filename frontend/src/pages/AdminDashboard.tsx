@@ -1,24 +1,22 @@
 import React, { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import api from '../services/api'
+import { adminApi } from '../services/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import AnalyticsDashboard from '../components/Analytics'
 import ThreatDetectionDashboard from '../components/ThreatDetection'
-import { 
-  Shield, Users, FileText, ArrowLeft, ToggleLeft, ToggleRight, ShieldAlert, CheckCircle2,
-  Settings, Key, Lock, Activity, AlertTriangle, Search, Filter, Download, RefreshCw,
-  Monitor, Smartphone, Globe, Clock, Ban, UserCheck, UserX, LogOut, Trash2, Edit,
-  Calendar, MapPin, Fingerprint, ShieldCheck, Database, Server, Zap, BarChart3, Radar
+import {
+  Shield, Users, ShieldAlert, CheckCircle2, Monitor, UserCheck, LogOut,
+  Ban, Trash2, Edit, Fingerprint, ShieldCheck, Database, Server,
+  BarChart3, Radar, Key, RefreshCw, Search, Download, Activity, MapPin,
+  Lock, ToggleRight
 } from 'lucide-react'
 
 interface User {
@@ -74,10 +72,10 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('users')
   const [users, setUsers] = useState<User[]>([])
   const [logs, setLogs] = useState<AuditLog[]>([])
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [loginAttempts, setLoginAttempts] = useState<LoginAttempt[]>([])
-  const [refreshTokens, setRefreshTokens] = useState<RefreshToken[]>([])
-  const [loading, setLoading] = useState(true)
+  const [sessions] = useState<Session[]>([])
+  const [loginAttempts] = useState<LoginAttempt[]>([])
+  const [refreshTokens] = useState<RefreshToken[]>([])
+  const [, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
@@ -89,8 +87,8 @@ const AdminDashboard: React.FC = () => {
     setError('')
     try {
       const [usersRes, logsRes] = await Promise.all([
-        api.get('/admin/users').then(res => res.data),
-        api.get('/admin/audit-logs').then(res => res.data)
+        adminApi.listUsers().then(res => res.data),
+        adminApi.getAuditLogs().then(res => res.data)
       ])
       setUsers(usersRes)
       setLogs(logsRes)
@@ -109,7 +107,7 @@ const AdminDashboard: React.FC = () => {
     setError('')
     setSuccess('')
     try {
-      await api.put(`/admin/users/${userId}/status?enabled=${!currentStatus}`)
+      await adminApi.updateStatus(userId, !currentStatus)
       setSuccess('User status updated successfully.')
       fetchAdminData()
     } catch (err: any) {
@@ -121,7 +119,7 @@ const AdminDashboard: React.FC = () => {
     setError('')
     setSuccess('')
     try {
-      await api.put(`/admin/users/${userId}/role?role=${newRole}`)
+      await adminApi.updateRole(userId, newRole)
       setSuccess('User role updated successfully.')
       fetchAdminData()
     } catch (err: any) {
@@ -129,41 +127,19 @@ const AdminDashboard: React.FC = () => {
     }
   }
 
-  const handleDeleteUser = async (userId: number) => {
-    if (!confirm('Are you sure you want to delete this user?')) return
-    setError('')
-    setSuccess('')
-    try {
-      await api.delete(`/admin/users/${userId}`)
-      setSuccess('User deleted successfully.')
-      fetchAdminData()
-    } catch (err: any) {
-      setError('Failed to delete user.')
-    }
+  const handleDeleteUser = async (_userId: number) => {
+    // Backend does not have a delete endpoint for admin users
+    setError('User deletion not implemented in backend.')
   }
 
-  const handleRevokeSession = async (sessionId: number) => {
-    setError('')
-    setSuccess('')
-    try {
-      await api.post(`/admin/sessions/${sessionId}/revoke`)
-      setSuccess('Session revoked successfully.')
-      fetchAdminData()
-    } catch (err: any) {
-      setError('Failed to revoke session.')
-    }
+  const handleRevokeSession = async (_sessionId: number) => {
+    // Backend does not have admin session revoke endpoint
+    setError('Session revocation not implemented in backend.')
   }
 
-  const handleRevokeRefreshToken = async (tokenId: number) => {
-    setError('')
-    setSuccess('')
-    try {
-      await api.post(`/admin/refresh-tokens/${tokenId}/revoke`)
-      setSuccess('Refresh token revoked successfully.')
-      fetchAdminData()
-    } catch (err: any) {
-      setError('Failed to revoke refresh token.')
-    }
+  const handleRevokeRefreshToken = async (_tokenId: number) => {
+    // Backend does not have admin refresh token revoke endpoint
+    setError('Refresh token revocation not implemented in backend.')
   }
 
   const filteredUsers = users.filter(u => {
