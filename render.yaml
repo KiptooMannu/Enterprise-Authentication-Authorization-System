@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: authcore-backend
+    env: java
+    plan: free
+    buildCommand: mvn clean package -DskipTests
+    startCommand: java -jar target/*.jar
+    envVars:
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRATION
+        value: "86400000"
+      - key: REFRESH_TOKEN_EXPIRATION
+        value: "604800000"
+      - key: OAUTH2_GOOGLE_CLIENT_ID
+        sync: false
+      - key: OAUTH2_GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: OAUTH2_GITHUB_CLIENT_ID
+        sync: false
+      - key: OAUTH2_GITHUB_CLIENT_SECRET
+        sync: false
