@@ -51,8 +51,9 @@ const Dashboard: React.FC = () => {
       
       const oauthRes = await oauthApi.getLinkedAccounts()
       setOauthStatus(oauthRes.data)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load dashboard data:', err)
+      setError(err.response?.data?.error || 'Failed to load dashboard data. Please try again.')
     }
   }
 

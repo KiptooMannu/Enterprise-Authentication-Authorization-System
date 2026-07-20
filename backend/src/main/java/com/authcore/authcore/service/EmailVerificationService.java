@@ -3,6 +3,8 @@ package com.authcore.authcore.service;
 import com.authcore.authcore.entity.EmailVerification;
 import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.repository.EmailVerificationRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -16,6 +18,8 @@ import java.util.UUID;
 
 @Service
 public class EmailVerificationService {
+
+    private static final Logger log = LoggerFactory.getLogger(EmailVerificationService.class);
 
     private final EmailVerificationRepository emailVerificationRepository;
     private JavaMailSender mailSender; // optional in tests
@@ -95,8 +99,9 @@ public class EmailVerificationService {
         try {
             mailSender.send(message);
         } catch (Exception e) {
-            // Log error but don't throw - email sending is not critical for registration
-            System.err.println("Failed to send verification email: " + e.getMessage());
+            // Log error but don't throw - email sending is not critical for registration.
+            // Preserve the full stack trace so delivery failures can be diagnosed.
+            log.error("Failed to send verification email to {}", toEmail, e);
         }
     }
 }
