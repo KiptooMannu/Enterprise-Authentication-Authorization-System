@@ -1,5 +1,7 @@
 package com.authcore.authcore.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.NonNull;
@@ -90,28 +92,46 @@ public class SecurityConfig {
         return bean;
     }
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+    private static final List<String> DEFAULT_ALLOWED_ORIGINS =
+        List.of("http://localhost:5173", "http://localhost:3000");
+
     @NonNull
     private CorsConfiguration createCorsConfiguration(Environment env) {
         Objects.requireNonNull(env, "Environment must not be null");
         CorsConfiguration configuration = new CorsConfiguration();
+
         String allowedOrigins = env.getProperty("FRONTEND_ALLOWED_ORIGINS");
         if (allowedOrigins == null || allowedOrigins.isBlank()) {
             allowedOrigins = env.getProperty("FRONTEND_URL");
-            if (allowedOrigins == null || allowedOrigins.isBlank()) {
-                allowedOrigins = "*";
-            }
         }
-        if (allowedOrigins != null && !allowedOrigins.isBlank()) {
-            String[] origins = allowedOrigins.split("\\s*,\\s*");
-            if (origins.length > 0) {
-                configuration.setAllowedOriginPatterns(Arrays.asList(origins));
-            }
+
+        List<String> origins;
+        if (allowedOrigins == null || allowedOrigins.isBlank()) {
+            log.warn("No FRONTEND_ALLOWED_ORIGINS/FRONTEND_URL configured; "
+                + "falling back to development defaults {}. Set FRONTEND_ALLOWED_ORIGINS explicitly in production.",
+                DEFAULT_ALLOWED_ORIGINS);
+            origins = DEFAULT_ALLOWED_ORIGINS;
+        } else {
+            origins = Arrays.stream(allowedOrigins.split("\\s*,\\s*"))
+                .filter(o -> !o.isBlank())
+                .toList();
         }
+
+        // Never combine a wildcard origin with credentials: it would let any site make
+        // authenticated cross-origin requests. Reject the wildcard instead.
+        if (origins.contains("*")) {
+            throw new IllegalStateException(
+                "Wildcard '*' origin is not permitted with credentialed CORS. "
+                + "Configure explicit origins via FRONTEND_ALLOWED_ORIGINS.");
+        }
+
+        configuration.setAllowedOriginPatterns(origins);
         configuration.addAllowedMethod(CorsConfiguration.ALL);
         configuration.addAllowedHeader(CorsConfiguration.ALL);
         configuration.setAllowCredentials(true);
         configuration.setExposedHeaders(List.of("Authorization"));
-        return Objects.requireNonNull(configuration, "CorsConfiguration must not be null");
+        return configuration;
     }
 
     @Bean
