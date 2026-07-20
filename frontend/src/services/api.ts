@@ -17,6 +17,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+// Log 202 for successful responses
+api.interceptors.response.use(
+  (response) => {
+    console.log(202)
+    return response
+  },
+  (error) => {
+    console.error('API Error:', error)
+    return Promise.reject(error)
+  }
+)
+
 // Handle token refresh
 api.interceptors.response.use(
   (response) => response,
@@ -29,7 +41,7 @@ api.interceptors.response.use(
       try {
         const refreshToken = localStorage.getItem('refreshToken')
         if (refreshToken) {
-          const response = await axios.post(`${config.apiBaseUrl}/auth/refresh`, {
+          const response = await axios.post(`${config.apiBaseUrl}/api/auth/refresh`, {
             refreshToken,
           })
 
@@ -53,89 +65,89 @@ api.interceptors.response.use(
 
 export const authApi = {
   login: (email: string, password: string) =>
-    api.post('/users/login', { email, password }),
+    api.post('/api/users/login', { email, password }),
 
   register: (username: string, email: string, password: string) =>
-    api.post('/users/register', { username, email, password }),
+    api.post('/api/users/register', { username, email, password }),
 
-  logout: () => api.post('/auth/logout'),
+  logout: () => api.post('/api/auth/logout'),
 
-  logoutAll: () => api.post('/auth/logout-all'),
+  logoutAll: () => api.post('/api/auth/logout-all'),
 
   refreshToken: (refreshToken: string) =>
-    api.post('/auth/refresh', { refreshToken }),
+    api.post('/api/auth/refresh', { refreshToken }),
 
-  getMe: () => api.get('/users/me'),
+  getMe: () => api.get('/api/users/me'),
 
   changePassword: (currentPassword: string, newPassword: string) =>
-    api.post('/users/change-password', { currentPassword, newPassword }),
+    api.post('/api/users/change-password', { currentPassword, newPassword }),
 
   forgotPassword: (email: string) =>
-    api.post('/users/forgot-password', { email }),
+    api.post('/api/users/forgot-password', { email }),
 
   resetPassword: (token: string, newPassword: string) =>
-    api.post('/users/reset-password', { token, newPassword }),
+    api.post('/api/users/reset-password', { token, newPassword }),
 
   resendVerification: (email: string) =>
-    api.post('/auth/resend-verification', { email }),
+    api.post('/api/auth/resend-verification', { email }),
 
-  verifyEmail: (token: string) => api.get('/auth/verify-email', { params: { token } }),
+  verifyEmail: (token: string) => api.get('/api/auth/verify-email', { params: { token } }),
 
   revoke: (token: string, type: 'access' | 'refresh') =>
-    api.post('/auth/revoke', { token, type }),
+    api.post('/api/auth/revoke', { token, type }),
 
-  getMyAuditLogs: () => api.get('/users/audit-logs'),
+  getMyAuditLogs: () => api.get('/api/users/audit-logs'),
 }
 
 export const sessionApi = {
-  getActiveSessions: () => api.get('/users/sessions'),
+  getActiveSessions: () => api.get('/api/users/sessions'),
   
   revokeSession: (token: string) =>
-    api.post('/users/sessions/revoke', { token }),
+    api.post('/api/users/sessions/revoke', { token }),
   
-  revokeAllSessions: () => api.post('/users/sessions/revoke-all'),
+  revokeAllSessions: () => api.post('/api/users/sessions/revoke-all'),
 }
 
 export const oauthApi = {
-  getLinkedAccounts: () => api.get('/oauth2/accounts'),
+  getLinkedAccounts: () => api.get('/api/oauth2/accounts'),
 
   unlinkAccount: (provider: string) =>
-    api.delete(`/oauth2/unlink/${provider}`),
+    api.delete(`/api/oauth2/unlink/${provider}`),
 }
 
 export const mfaApi = {
-  getStatus: () => api.get('/mfa/status'),
+  getStatus: () => api.get('/api/mfa/status'),
 
-  setup: () => api.post('/mfa/setup'),
+  setup: () => api.post('/api/mfa/setup'),
 
-  verify: (code: string) => api.post('/mfa/verify', { code }),
+  verify: (code: string) => api.post('/api/mfa/verify', { code }),
 
-  disable: (code: string) => api.post('/mfa/disable', { code }),
+  disable: (code: string) => api.post('/api/mfa/disable', { code }),
 
   loginVerify: (challengeToken: string, code: string) =>
-    api.post('/mfa/login-verify', { challengeToken, code }),
+    api.post('/api/mfa/login-verify', { challengeToken, code }),
 }
 
 export const adminApi = {
-  listUsers: () => api.get('/admin/users'),
+  listUsers: () => api.get('/api/admin/users'),
 
   updateRole: (id: number, role: string) =>
-    api.put(`/admin/users/${id}/role`, null, { params: { role } }),
+    api.put(`/api/admin/users/${id}/role`, null, { params: { role } }),
 
   updateStatus: (id: number, enabled: boolean) =>
-    api.put(`/admin/users/${id}/status`, null, { params: { enabled } }),
+    api.put(`/api/admin/users/${id}/status`, null, { params: { enabled } }),
 
-  getAuditLogs: () => api.get('/admin/audit-logs'),
+  getAuditLogs: () => api.get('/api/admin/audit-logs'),
 
-  getUserAuditLogs: (userId: number) => api.get(`/admin/audit-logs/user/${userId}`),
+  getUserAuditLogs: (userId: number) => api.get(`/api/admin/audit-logs/user/${userId}`),
 }
 
 export const protectedApi = {
-  me: () => api.get('/protected/me'),
+  me: () => api.get('/api/protected/me'),
 
-  adminCheck: () => api.get('/protected/admin'),
+  adminCheck: () => api.get('/api/protected/admin'),
 
-  managerCheck: () => api.get('/protected/manager'),
+  managerCheck: () => api.get('/api/protected/manager'),
 }
 
 export default api
