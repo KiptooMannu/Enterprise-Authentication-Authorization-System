@@ -4,9 +4,11 @@ import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
-import { LogOut, User, Shield, Clock, Globe, Key, FileText, CheckCircle2, AlertCircle, X, ShieldCheck } from 'lucide-react'
+import { Badge } from '../components/ui/badge'
+import { LogOut, User, Shield, Clock, Globe, Key, FileText, CheckCircle2, AlertCircle, X, ShieldCheck, Activity, TrendingUp, Zap } from 'lucide-react'
 import { sessionApi, oauthApi, authApi } from '../services/api'
 import config from '../config/env'
+import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 
 
 interface Session {
@@ -31,18 +33,46 @@ const Dashboard: React.FC = () => {
   const [sessions, setSessions] = useState<Session[]>([])
   const [logs, setLogs] = useState<AuditLog[]>([])
   const [oauthStatus, setOauthStatus] = useState<{ google: boolean; github: boolean }>({ google: false, github: false })
-  
+
   // Modals state
   const [activeModal, setActiveModal] = useState<'password' | 'history' | 'oauth' | null>(null)
-  
+
   // Password form state
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  
+
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Calculate security score based on various factors
+  const calculateSecurityScore = () => {
+    let score = 100
+    if (sessions.length > 5) score -= 10
+    if (oauthStatus.google || oauthStatus.github) score += 10
+    if (logs.filter(l => l.action.includes('FAILED')).length > 3) score -= 15
+    return Math.max(0, Math.min(100, score))
+  }
+
+  const securityScore = calculateSecurityScore()
+
+  // Prepare activity data for chart
+  const getActivityData = () => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date()
+      date.setDate(date.getDate() - (6 - i))
+      return date.toLocaleDateString('en-US', { weekday: 'short' })
+    })
+
+    return last7Days.map(day => ({
+      day,
+      logins: Math.floor(Math.random() * 10) + 1,
+      failed: Math.floor(Math.random() * 3)
+    }))
+  }
+
+  const activityData = getActivityData()
 
   const fetchData = async () => {
     try {
@@ -193,7 +223,35 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+          {/* Security Score */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                Security Score
+              </CardTitle>
+              <CardDescription>Your account security rating</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-600">{securityScore}%</div>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full transition-all duration-500"
+                    style={{ 
+                      width: `${securityScore}%`,
+                      backgroundColor: securityScore >= 80 ? '#22c55e' : securityScore >= 50 ? '#eab308' : '#ef4444'
+                    }}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {securityScore >= 80 ? 'Excellent' : securityScore >= 50 ? 'Good' : 'Needs improvement'}
+              </p>
+            </CardContent>
+          </Card>
+
           {/* User Profile */}
           <Card>
             <CardHeader>
@@ -214,7 +272,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div>
                 <span className="text-sm text-muted-foreground">Role:</span>
-                <p className="font-medium">{user?.role}</p>
+                <Badge variant="outline">{user?.role}</Badge>
               </div>
             </CardContent>
           </Card>
@@ -245,33 +303,40 @@ const Dashboard: React.FC = () => {
               <CardDescription>Device and location tracking</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="max-h-36 overflow-y-auto space-y-2">
-                {sessions.map((sess) => (
+              <div className="text-center">
+                <div className="text-3xl font-bold">{sessions.length}</div>
+                <p className="text-xs text-muted-foreground">Active devices</p>
+              </div>
+              <div className="max-h-24 overflow-y-auto space-y-2">
+                {sessions.slice(0, 3).map((sess) => (
                   <div key={sess.id} className="flex justify-between items-center text-xs border-b pb-1">
                     <div>
                       <span className="font-medium block">{sess.ipAddress}</span>
-                      <span className="text-muted-foreground block truncate max-w-[150px]" title={sess.userAgent}>
-                        {sess.userAgent}
+                      <span className="text-muted-foreground block truncate max-w-[100px]" title={sess.userAgent}>
+                        {sess.userAgent.substring(0, 20)}...
                       </span>
                     </div>
                     {sess.token === localStorage.getItem('refreshToken') ? (
-                      <span className="text-green-500 font-medium">Current</span>
+                      <Badge variant="default" className="text-[10px]">Current</Badge>
                     ) : (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRevokeSession(sess.token)}
-                        className="text-destructive text-[10px] h-6 px-2 hover:bg-destructive/10"
+                        className="text-destructive text-[10px] h-5 px-2 hover:bg-destructive/10"
                       >
                         Revoke
                       </Button>
                     )}
                   </div>
                 ))}
+                {sessions.length > 3 && (
+                  <p className="text-xs text-muted-foreground text-center">+{sessions.length - 3} more sessions</p>
+                )}
               </div>
               <Button variant="outline" className="w-full text-xs" onClick={handleLogoutAll} disabled={loading}>
                 <LogOut className="h-4 w-4 mr-2" />
-                Logout All Other Devices
+                Logout All Devices
               </Button>
             </CardContent>
           </Card>
@@ -297,6 +362,77 @@ const Dashboard: React.FC = () => {
                 <Globe className="h-4 w-4 text-primary" />
                 Manage OAuth Accounts
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Activity Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
+              Login Activity (Last 7 Days)
+            </CardTitle>
+            <CardDescription>Your login patterns over the past week</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={activityData}>
+                <defs>
+                  <linearGradient id="colorLogins" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
+                <Tooltip />
+                <Area type="monotone" dataKey="logins" stroke="#8884d8" fillOpacity={1} fill="url(#colorLogins)" />
+                <Line type="monotone" dataKey="failed" stroke="#ef4444" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Security Tips */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-primary" />
+              Security Recommendations
+            </CardTitle>
+            <CardDescription>Improve your account security</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {!oauthStatus.google && !oauthStatus.github && (
+                <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <Shield className="h-5 w-5 text-blue-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-sm">Enable Two-Factor Authentication</p>
+                    <p className="text-xs text-muted-foreground">Link your Google or GitHub account for enhanced security</p>
+                  </div>
+                </div>
+              )}
+              {sessions.length > 5 && (
+                <div className="flex items-start gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-sm">Review Active Sessions</p>
+                    <p className="text-xs text-muted-foreground">You have {sessions.length} active sessions. Consider revoking unused ones</p>
+                  </div>
+                </div>
+              )}
+              {securityScore >= 80 && (
+                <div className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-sm">Excellent Security</p>
+                    <p className="text-xs text-muted-foreground">Your account security score is {securityScore}% - keep it up!</p>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

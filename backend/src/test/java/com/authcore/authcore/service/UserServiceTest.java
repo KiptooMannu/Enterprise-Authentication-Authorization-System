@@ -64,7 +64,7 @@ class UserServiceTest {
         when(loginAttemptService.isAccountLocked(any(UserEntity.class))).thenReturn(false);
         when(passwordEncoder.matches(any(CharSequence.class), any(String.class))).thenReturn(true);
 
-        UserEntity authenticated = userService.authenticateUser(new LoginRequest("jane@example.com", "StrongPass123!"));
+        UserEntity authenticated = userService.authenticateUser(new LoginRequest("jane@example.com", "StrongPass123!", null, null, null, null, null, null));
 
         assertEquals("jane", authenticated.getUsername());
     }

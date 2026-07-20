@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
+import { adminApi } from '../services/api'
 import {
   AlertTriangle, Shield, Activity, Lock, Eye, EyeOff,
   CheckCircle2, XCircle, MapPin, RefreshCw, AlertCircle,
@@ -20,67 +21,91 @@ interface ThreatEvent {
   status: 'active' | 'resolved' | 'investigating'
 }
 
+interface AuditLog {
+  id: number
+  action: string
+  ipAddress: string
+  details: string
+  timestamp: string
+  targetType?: string
+  targetId?: number
+}
+
 const ThreatDetectionDashboard: React.FC = () => {
-  const [threats, setThreats] = useState<ThreatEvent[]>([
-    {
-      id: '1',
-      type: 'suspicious_location',
-      severity: 'high',
-      user: 'john_doe',
-      ip: '192.168.1.100',
-      location: 'Moscow, Russia',
-      timestamp: '5 minutes ago',
-      description: 'Login from unusual geographic location',
-      status: 'investigating'
-    },
-    {
-      id: '2',
-      type: 'rapid_attempts',
-      severity: 'critical',
-      user: 'unknown',
-      ip: '10.0.0.50',
-      location: 'Unknown',
-      timestamp: '2 minutes ago',
-      description: '20 failed login attempts in 1 minute',
-      status: 'active'
-    },
-    {
-      id: '3',
-      type: 'blocked_ip',
-      severity: 'medium',
-      user: 'unknown',
-      ip: '172.16.0.25',
-      location: 'Beijing, China',
-      timestamp: '15 minutes ago',
-      description: 'IP address blocked due to suspicious activity',
-      status: 'resolved'
-    },
-    {
-      id: '4',
-      type: 'account_lockout',
-      severity: 'high',
-      user: 'jane_smith',
-      ip: '192.168.1.200',
-      location: 'London, UK',
-      timestamp: '1 hour ago',
-      description: 'Account locked after 5 failed attempts',
-      status: 'investigating'
-    },
-    {
-      id: '5',
-      type: 'failed_login',
-      severity: 'low',
-      user: 'bob_wilson',
-      ip: '192.168.1.150',
-      location: 'New York, USA',
-      timestamp: '2 hours ago',
-      description: 'Single failed login attempt',
-      status: 'resolved'
-    }
-  ])
+  const [threats, setThreats] = useState<ThreatEvent[]>([])
 
   const [showResolved, setShowResolved] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
+
+  useEffect(() => {
+    fetchThreatData()
+  }, [])
+
+  useEffect(() => {
+    if (autoRefresh) {
+      const interval = setInterval(fetchThreatData, 30000) // Refresh every 30 seconds
+      return () => clearInterval(interval)
+    }
+  }, [autoRefresh])
+
+  const fetchThreatData = async () => {
+    try {
+      const response = await adminApi.getAuditLogs()
+      const logs = response.data || response
+      
+      // Transform audit logs to threat events
+      const threatEvents: ThreatEvent[] = logs.map((log: AuditLog) => {
+        let type: ThreatEvent['type'] = 'failed_login'
+        let severity: ThreatEvent['severity'] = 'low'
+        let description = log.details || log.action
+        let status: ThreatEvent['status'] = 'active'
+
+        // Determine threat type and severity based on action
+        if (log.action.includes('FAILED_LOGIN') || log.action.includes('LOGIN_FAILED')) {
+          type = 'failed_login'
+          severity = 'medium'
+        } else if (log.action.includes('ACCOUNT_LOCKED') || log.action.includes('LOCKOUT')) {
+          type = 'account_lockout'
+          severity = 'high'
+          status = 'investigating'
+        } else if (log.action.includes('BLOCKED') || log.action.includes('IP_BLOCKED')) {
+          type = 'blocked_ip'
+          severity = 'high'
+          status = 'resolved'
+        } else if (log.action.includes('SUSPICIOUS') || log.action.includes('UNUSUAL')) {
+          type = 'suspicious_location'
+          severity = 'high'
+          status = 'investigating'
+        } else if (log.action.includes('RAPID') || log.action.includes('MULTIPLE')) {
+          type = 'rapid_attempts'
+          severity = 'critical'
+        }
+
+        // Extract user from details if available
+        const userMatch = description.match(/user\s+(\S+)/i)
+        const user = userMatch ? userMatch[1] : 'unknown'
+
+        // Format timestamp
+        const timestamp = new Date(log.timestamp).toLocaleString()
+
+        return {
+          id: log.id.toString(),
+          type,
+          severity,
+          user,
+          ip: log.ipAddress,
+          location: 'Unknown', // Would need geolocation service
+          timestamp,
+          description,
+          status
+        }
+      })
+
+      setThreats(threatEvents)
+    } catch (error) {
+      console.error('Failed to fetch threat data:', error)
+    }
+  }
 
   const severityColors = {
     low: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
@@ -99,6 +124,18 @@ const ThreatDetectionDashboard: React.FC = () => {
 
   const activeThreats = threats.filter(t => t.status !== 'resolved')
   const criticalThreats = threats.filter(t => t.severity === 'critical' && t.status !== 'resolved')
+  const resolvedToday = threats.filter(t => t.status === 'resolved').length
+  
+  // Calculate security score based on threat levels
+  const calculateSecurityScore = () => {
+    if (threats.length === 0) return 100
+    const criticalCount = threats.filter(t => t.severity === 'critical').length
+    const highCount = threats.filter(t => t.severity === 'high').length
+    const mediumCount = threats.filter(t => t.severity === 'medium').length
+    const score = 100 - (criticalCount * 20) - (highCount * 10) - (mediumCount * 5)
+    return Math.max(0, score)
+  }
+  const securityScore = calculateSecurityScore()
 
   const handleResolve = (id: string) => {
     setThreats(threats.map(t => 
@@ -142,7 +179,7 @@ const ThreatDetectionDashboard: React.FC = () => {
             <CheckCircle2 className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">12</div>
+            <div className="text-2xl font-bold text-green-600">{resolvedToday}</div>
             <p className="text-xs text-muted-foreground">Threats neutralized</p>
           </CardContent>
         </Card>
@@ -152,7 +189,7 @@ const ThreatDetectionDashboard: React.FC = () => {
             <Shield className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">92%</div>
+            <div className="text-2xl font-bold text-blue-600">{securityScore}%</div>
             <p className="text-xs text-muted-foreground">System health</p>
           </CardContent>
         </Card>
@@ -286,27 +323,51 @@ const ThreatDetectionDashboard: React.FC = () => {
           <CardDescription>AI-powered security insights</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <CheckCircle2 className="h-5 w-5 text-blue-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-sm">Enable MFA for all admin accounts</p>
-              <p className="text-xs text-muted-foreground">3 admin accounts without MFA enabled</p>
+          {criticalThreats.length > 0 && (
+            <div className="flex items-start gap-3 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">Critical threats require immediate attention</p>
+                <p className="text-xs text-muted-foreground">{criticalThreats.length} critical threat(s) detected</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-            <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-sm">Review failed login patterns</p>
-              <p className="text-xs text-muted-foreground">Unusual activity detected from IP range 192.168.1.0/24</p>
+          )}
+          {threats.filter(t => t.severity === 'high').length > 0 && (
+            <div className="flex items-start gap-3 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-orange-600 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">High severity threats detected</p>
+                <p className="text-xs text-muted-foreground">{threats.filter(t => t.severity === 'high').length} high severity threat(s) require investigation</p>
+              </div>
             </div>
-          </div>
-          <div className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
-            <Shield className="h-5 w-5 text-green-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-sm">Password policy compliance at 95%</p>
-              <p className="text-xs text-muted-foreground">12 users need password update</p>
+          )}
+          {threats.filter(t => t.type === 'failed_login').length > 3 && (
+            <div className="flex items-start gap-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">Review failed login patterns</p>
+                <p className="text-xs text-muted-foreground">{threats.filter(t => t.type === 'failed_login').length} failed login attempts detected</p>
+              </div>
             </div>
-          </div>
+          )}
+          {securityScore >= 90 && (
+            <div className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+              <Shield className="h-5 w-5 text-green-600 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">System security is healthy</p>
+                <p className="text-xs text-muted-foreground">Security score at {securityScore}% - continue monitoring</p>
+              </div>
+            </div>
+          )}
+          {threats.length === 0 && (
+            <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <CheckCircle2 className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <p className="font-medium text-sm">No threats detected</p>
+                <p className="text-xs text-muted-foreground">System is operating normally</p>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

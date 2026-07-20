@@ -20,7 +20,7 @@ public class AdminAuthorizationIntegrationTest {
     @Test
     public void adminCanAccessAdminEndpoints() {
         // login existing admin created at startup
-        LoginRequest login = new LoginRequest("admin@example.com", "Admin123!");
+        LoginRequest login = new LoginRequest("admin@example.com", "Admin123!", null, null, null, null, null, null);
         ResponseEntity<AuthResponse> authResponse = restTemplate.postForEntity("/api/users/login", login, AuthResponse.class);
         assertEquals(HttpStatus.OK, authResponse.getStatusCode());
         AuthResponse body = authResponse.getBody();
@@ -46,7 +46,7 @@ public class AdminAuthorizationIntegrationTest {
         ResponseEntity<String> createResponse = restTemplate.postForEntity("/api/users/register", registration, String.class);
         assertEquals(HttpStatus.CREATED, createResponse.getStatusCode());
 
-        LoginRequest login = new LoginRequest(uniqueEmail, "Password123!");
+        LoginRequest login = new LoginRequest(uniqueEmail, "Password123!", null, null, null, null, null, null);
         ResponseEntity<AuthResponse> authResponse = restTemplate.postForEntity("/api/users/login", login, AuthResponse.class);
         assertEquals(HttpStatus.OK, authResponse.getStatusCode());
         AuthResponse body = authResponse.getBody();

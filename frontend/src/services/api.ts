@@ -64,8 +64,17 @@ api.interceptors.response.use(
 )
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    api.post('/users/login', { email, password }),
+  login: (email: string, password: string, location?: any) =>
+    api.post('/users/login', { 
+      email, 
+      password,
+      latitude: location?.latitude,
+      longitude: location?.longitude,
+      accuracy: location?.accuracy,
+      altitude: location?.altitude,
+      heading: location?.heading,
+      speed: location?.speed
+    }),
 
   register: (username: string, email: string, password: string) =>
     api.post('/users/register', { username, email, password }),
@@ -131,6 +140,9 @@ export const mfaApi = {
 export const adminApi = {
   listUsers: () => api.get('/admin/users'),
 
+  addUser: (username: string, email: string, password: string) =>
+    api.post('/users/register', { username, email, password }),
+
   updateRole: (id: number, role: string) =>
     api.put(`/admin/users/${id}/role`, null, { params: { role } }),
 
@@ -140,6 +152,32 @@ export const adminApi = {
   getAuditLogs: () => api.get('/admin/audit-logs'),
 
   getUserAuditLogs: (userId: number) => api.get(`/admin/audit-logs/user/${userId}`),
+
+  getAllSessions: () => api.get('/admin/sessions'),
+
+  revokeSession: (id: number) => api.delete(`/admin/sessions/${id}`),
+
+  getAllConfigs: () => api.get('/admin/config'),
+
+  getConfigsByCategory: (category: string) => api.get(`/admin/config/${category}`),
+
+  updateConfig: (data: { key: string; value: string; category: string; description?: string }) => api.put('/admin/config', data),
+
+  initializeConfigs: () => api.post('/admin/config/initialize'),
+
+  getAllRateLimits: () => api.get('/admin/rate-limits'),
+
+  createOrUpdateRateLimit: (data: { endpoint: string; maxRequests: number; windowMinutes: number; enabled?: boolean }) => api.post('/admin/rate-limits', data),
+
+  deleteRateLimit: (endpoint: string) => api.delete(`/admin/rate-limits/${endpoint}`),
+
+  initializeRateLimits: () => api.post('/admin/rate-limits/initialize'),
+
+  getAllLoginLocations: () => api.get('/admin/login-locations'),
+
+  getUserLoginLocations: (userId: number) => api.get(`/admin/login-locations/user/${userId}`),
+
+  getMostRecentLoginLocation: (userId: number) => api.get(`/admin/login-locations/user/${userId}/recent`),
 }
 
 export const protectedApi = {

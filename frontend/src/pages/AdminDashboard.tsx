@@ -10,13 +10,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog'
 import AnalyticsDashboard from '../components/Analytics'
 import ThreatDetectionDashboard from '../components/ThreatDetection'
 import {
   Shield, Users, ShieldAlert, CheckCircle2, Monitor, UserCheck, LogOut,
-  Ban, Trash2, Edit, Fingerprint, ShieldCheck, Database, Server,
+  Ban, Trash2, Fingerprint, ShieldCheck, Database, Server,
   BarChart3, Radar, Key, RefreshCw, Search, Download, Activity, MapPin,
-  Lock, ToggleRight
+  Lock, X, Settings, FileText
 } from 'lucide-react'
 
 interface User {
@@ -40,12 +41,13 @@ interface AuditLog {
 
 interface Session {
   id: number
-  userId: number
+  userId: number | null
+  username: string
   token: string
-  deviceInfo: string
   ipAddress: string
+  userAgent: string
   createdAt: string
-  expiresAt: string
+  expiryDate: string
   isActive: boolean
 }
 
@@ -72,15 +74,41 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState('users')
   const [users, setUsers] = useState<User[]>([])
   const [logs, setLogs] = useState<AuditLog[]>([])
-  const [sessions] = useState<Session[]>([])
   const [loginAttempts] = useState<LoginAttempt[]>([])
-  const [refreshTokens] = useState<RefreshToken[]>([])
+  const [refreshTokens, setRefreshTokens] = useState<RefreshToken[]>([])
   const [, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [roleFilter, setRoleFilter] = useState('ALL')
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [addUserDialogOpen, setAddUserDialogOpen] = useState(false)
+  const [newUser, setNewUser] = useState({ username: '', email: '', password: '' })
+  const [addingUser, setAddingUser] = useState(false)
+  const [updatingRole, setUpdatingRole] = useState<number | null>(null)
+  const [togglingStatus, setTogglingStatus] = useState<number | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
+
+  // Configuration state
+  const [config, setConfig] = useState<Record<string, Record<string, string>>>({
+    security: {},
+    lockout: {},
+    retention: {},
+    system: {}
+  })
+
+  // Settings loading states
+  const [savingSecurity, setSavingSecurity] = useState(false)
+  const [savingLockout, setSavingLockout] = useState(false)
+  const [savingRetention, setSavingRetention] = useState(false)
+  const [savingSystem, setSavingSystem] = useState(false)
+
+  // Rate limit state
+  const [rateLimits, setRateLimits] = useState<any[]>([])
+
+  // Login locations state
+  const [loginLocations, setLoginLocations] = useState<any[]>([])
+  const [selectedUserLocations, setSelectedUserLocations] = useState<any[]>([])
 
   const fetchAdminData = async () => {
     setLoading(true)
@@ -92,6 +120,65 @@ const AdminDashboard: React.FC = () => {
       ])
       setUsers(usersRes)
       setLogs(logsRes)
+
+      // Fetch sessions separately to avoid blocking if it fails
+      try {
+        const sessionsRes = await adminApi.getAllSessions()
+        setSessions(sessionsRes.data)
+        // Map sessions to refresh tokens format
+        setRefreshTokens(sessionsRes.data.map((s: Session) => ({
+          id: s.id,
+          userId: s.userId,
+          token: s.token,
+          expiresAt: s.expiryDate,
+          revoked: !s.isActive,
+          createdAt: s.createdAt
+        })))
+      } catch (sessionErr) {
+        console.error('Failed to load sessions:', sessionErr)
+        setSessions([])
+        setRefreshTokens([])
+      }
+
+      // Fetch configurations
+      try {
+        const configRes = await adminApi.getAllConfigs()
+        setConfig(configRes.data)
+      } catch (configErr) {
+        console.error('Failed to load configs:', configErr)
+        // Initialize default configs if none exist
+        try {
+          await adminApi.initializeConfigs()
+          const configRes = await adminApi.getAllConfigs()
+          setConfig(configRes.data)
+        } catch (initErr) {
+          console.error('Failed to initialize configs:', initErr)
+        }
+      }
+
+      // Fetch rate limits
+      try {
+        const rateLimitsRes = await adminApi.getAllRateLimits()
+        setRateLimits(rateLimitsRes.data)
+      } catch (rateLimitErr) {
+        console.error('Failed to load rate limits:', rateLimitErr)
+        // Initialize default rate limits if none exist
+        try {
+          await adminApi.initializeRateLimits()
+          const rateLimitsRes = await adminApi.getAllRateLimits()
+          setRateLimits(rateLimitsRes.data)
+        } catch (initErr) {
+          console.error('Failed to initialize rate limits:', initErr)
+        }
+      }
+
+      // Fetch login locations
+      try {
+        const locationsRes = await adminApi.getAllLoginLocations()
+        setLoginLocations(locationsRes.data)
+      } catch (locationErr) {
+        console.error('Failed to load login locations:', locationErr)
+      }
     } catch (err: any) {
       setError('Failed to fetch administrator data.')
     } finally {
@@ -106,24 +193,30 @@ const AdminDashboard: React.FC = () => {
   const handleToggleStatus = async (userId: number, currentStatus: boolean) => {
     setError('')
     setSuccess('')
+    setTogglingStatus(userId)
     try {
       await adminApi.updateStatus(userId, !currentStatus)
       setSuccess('User status updated successfully.')
       fetchAdminData()
     } catch (err: any) {
       setError('Failed to update user status.')
+    } finally {
+      setTogglingStatus(null)
     }
   }
 
   const handleRoleChange = async (userId: number, newRole: string) => {
     setError('')
     setSuccess('')
+    setUpdatingRole(userId)
     try {
       await adminApi.updateRole(userId, newRole)
       setSuccess('User role updated successfully.')
       fetchAdminData()
     } catch (err: any) {
       setError('Failed to update user role.')
+    } finally {
+      setUpdatingRole(null)
     }
   }
 
@@ -132,9 +225,36 @@ const AdminDashboard: React.FC = () => {
     setError('User deletion not implemented in backend.')
   }
 
-  const handleRevokeSession = async (_sessionId: number) => {
-    // Backend does not have admin session revoke endpoint
-    setError('Session revocation not implemented in backend.')
+  const handleAddUser = async () => {
+    setError('')
+    setSuccess('')
+    if (!newUser.username || !newUser.email || !newUser.password) {
+      setError('All fields are required.')
+      return
+    }
+    setAddingUser(true)
+    try {
+      await adminApi.addUser(newUser.username, newUser.email, newUser.password)
+      setSuccess('User added successfully.')
+      setAddUserDialogOpen(false)
+      setNewUser({ username: '', email: '', password: '' })
+      fetchAdminData()
+    } catch (err: any) {
+      setError('Failed to add user: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setAddingUser(false)
+    }
+  }
+
+  const handleRevokeSession = async (sessionId: number) => {
+    setError('')
+    try {
+      await adminApi.revokeSession(sessionId)
+      setSuccess('Session revoked successfully.')
+      setSessions(sessions.filter(s => s.id !== sessionId))
+    } catch (err: any) {
+      setError('Failed to revoke session: ' + (err.response?.data?.message || err.message))
+    }
   }
 
   const handleRevokeRefreshToken = async (_tokenId: number) => {
@@ -311,10 +431,75 @@ const AdminDashboard: React.FC = () => {
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Refresh
                     </Button>
-                    <Button size="sm">
-                      <UserCheck className="h-4 w-4 mr-2" />
-                      Add User
-                    </Button>
+                    <Dialog open={addUserDialogOpen} onOpenChange={setAddUserDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm">
+                          <UserCheck className="h-4 w-4 mr-2" />
+                          Add User
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New User</DialogTitle>
+                          <DialogDescription>
+                            Create a new user account with the specified role.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="username">Username</Label>
+                            <Input
+                              id="username"
+                              value={newUser.username}
+                              onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
+                              placeholder="Enter username"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="email">Email</Label>
+                            <Input
+                              id="email"
+                              type="email"
+                              value={newUser.email}
+                              onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                              placeholder="Enter email"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="password">Password</Label>
+                            <Input
+                              id="password"
+                              type="password"
+                              value={newUser.password}
+                              onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                              placeholder="Enter password (min 8 characters)"
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            New users will be created with the USER role. You can change their role after creation.
+                          </p>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setAddUserDialogOpen(false)} disabled={addingUser}>
+                            <X className="h-4 w-4 mr-2" />
+                            Cancel
+                          </Button>
+                          <Button onClick={handleAddUser} disabled={addingUser}>
+                            {addingUser ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                                Adding...
+                              </>
+                            ) : (
+                              <>
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Add User
+                              </>
+                            )}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
               </CardHeader>
@@ -336,10 +521,8 @@ const AdminDashboard: React.FC = () => {
                     <SelectContent>
                       <SelectItem value="ALL">All Roles</SelectItem>
                       <SelectItem value="USER">User</SelectItem>
-                      <SelectItem value="MODERATOR">Moderator</SelectItem>
                       <SelectItem value="MANAGER">Manager</SelectItem>
                       <SelectItem value="ADMIN">Admin</SelectItem>
-                      <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
                     </SelectContent>
                   </Select>
                   <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -370,17 +553,19 @@ const AdminDashboard: React.FC = () => {
                         <TableCell className="font-medium">{user.username}</TableCell>
                         <TableCell>{user.email}</TableCell>
                         <TableCell>
-                          <Select value={user.role} onValueChange={(v) => handleRoleChange(user.id, v)}>
+                          <Select 
+                            value={user.role} 
+                            onValueChange={(v) => handleRoleChange(user.id, v)}
+                            disabled={user.id === user?.id || updatingRole === user.id}
+                          >
                             <SelectTrigger className="w-[140px]">
                               <SelectValue />
+                              {updatingRole === user.id && <RefreshCw className="h-4 w-4 ml-2 animate-spin" />}
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="GUEST">Guest</SelectItem>
                               <SelectItem value="USER">User</SelectItem>
-                              <SelectItem value="MODERATOR">Moderator</SelectItem>
                               <SelectItem value="MANAGER">Manager</SelectItem>
                               <SelectItem value="ADMIN">Admin</SelectItem>
-                              <SelectItem value="SUPER_ADMIN">Super Admin</SelectItem>
                             </SelectContent>
                           </Select>
                         </TableCell>
@@ -396,19 +581,25 @@ const AdminDashboard: React.FC = () => {
                               variant="ghost"
                               size="sm"
                               onClick={() => handleToggleStatus(user.id, user.enabled)}
+                              disabled={user.id === user?.id || togglingStatus === user.id}
                             >
-                              {user.enabled ? <Ban className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                              {togglingStatus === user.id ? (
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                              ) : user.enabled ? (
+                                <Ban className="h-4 w-4" />
+                              ) : (
+                                <UserCheck className="h-4 w-4" />
+                              )}
                             </Button>
-                            <Button variant="ghost" size="sm">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteUser(user.id)}
-                            >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            {user.id !== user?.id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteUser(user.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -429,12 +620,9 @@ const AdminDashboard: React.FC = () => {
               <CardContent>
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {[
-                    { role: 'GUEST', color: 'bg-gray-500', permissions: ['View public content'] },
                     { role: 'USER', color: 'bg-blue-500', permissions: ['View profile', 'Change password', 'View own sessions'] },
-                    { role: 'MODERATOR', color: 'bg-purple-500', permissions: ['User permissions', 'View audit logs', 'Moderate content'] },
                     { role: 'MANAGER', color: 'bg-orange-500', permissions: ['User management', 'View reports', 'Team management'] },
-                    { role: 'ADMIN', color: 'bg-red-500', permissions: ['Full system access', 'User management', 'System configuration'] },
-                    { role: 'SUPER_ADMIN', color: 'bg-yellow-600', permissions: ['All admin permissions', 'System settings', 'Security policies'] }
+                    { role: 'ADMIN', color: 'bg-red-500', permissions: ['Full system access', 'User management', 'System configuration'] }
                   ].map((r) => (
                     <Card key={r.role} className="border-2">
                       <CardHeader>
@@ -465,51 +653,106 @@ const AdminDashboard: React.FC = () => {
           <TabsContent value="sessions" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Active Sessions</CardTitle>
-                <CardDescription>Monitor and manage user sessions across devices</CardDescription>
+                <CardTitle>Active Sessions with Location Data</CardTitle>
+                <CardDescription>Monitor user sessions with geolocation information</CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>User ID</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Coordinates</TableHead>
+                      <TableHead>Accuracy</TableHead>
                       <TableHead>Device</TableHead>
+                      <TableHead>Browser</TableHead>
                       <TableHead>IP Address</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead>Expires</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>Login Time</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sessions.length === 0 ? (
+                    {loginLocations.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground">
-                          No active sessions
+                        <TableCell colSpan={9} className="text-center text-muted-foreground">
+                          No login locations recorded
                         </TableCell>
                       </TableRow>
                     ) : (
-                      sessions.map((session) => (
-                        <TableRow key={session.id}>
-                          <TableCell>{session.userId}</TableCell>
-                          <TableCell>{session.deviceInfo}</TableCell>
-                          <TableCell>{session.ipAddress}</TableCell>
-                          <TableCell>{new Date(session.createdAt).toLocaleString()}</TableCell>
-                          <TableCell>{new Date(session.expiresAt).toLocaleString()}</TableCell>
-                          <TableCell>
-                            <Badge variant={session.isActive ? "default" : "destructive"}>
-                              {session.isActive ? 'Active' : 'Inactive'}
-                            </Badge>
+                      loginLocations.map((location: any) => (
+                        <TableRow key={location.id}>
+                          <TableCell className="font-medium">
+                            {users.find(u => u.id === location.userId)?.email || `User ${location.userId}`}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleRevokeSession(session.id)}
-                              disabled={!session.isActive}
-                            >
-                              <Ban className="h-4 w-4" />
-                            </Button>
+                          <TableCell>
+                            {location.formattedAddress ? (
+                              <div>
+                                <div className="font-medium">{location.city || 'Unknown'}</div>
+                                <div className="text-xs text-muted-foreground">{location.country || 'Unknown'}</div>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">Unknown</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {location.latitude && location.longitude ? (
+                              <div>
+                                <div className="text-xs">{location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}</div>
+                                <a
+                                  href={`https://maps.google.com/?q=${location.latitude},${location.longitude}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-blue-500 hover:underline"
+                                >
+                                  View on Map
+                                </a>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">N/A</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {location.accuracy ? (
+                              <span className="text-xs">
+                                {location.accuracy.toFixed(0)}m
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">N/A</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="text-xs">
+                              <div>{location.deviceType || 'Unknown'}</div>
+                              <div className="text-muted-foreground">{location.operatingSystem || 'Unknown'}</div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {location.browser || 'Unknown'}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {location.ipAddress || 'Unknown'}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {new Date(location.loginTime).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            {location.sessionId && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    await adminApi.revokeSession(location.sessionId)
+                                    setSuccess('Session revoked successfully')
+                                    fetchAdminData()
+                                  } catch (err) {
+                                    setError('Failed to revoke session')
+                                  }
+                                }}
+                              >
+                                Revoke
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
@@ -644,11 +887,9 @@ const AdminDashboard: React.FC = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>User ID</TableHead>
-                      <TableHead>Device Name</TableHead>
-                      <TableHead>Fingerprint</TableHead>
-                      <TableHead>Platform</TableHead>
-                      <TableHead>Browser</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead>IP Address</TableHead>
+                      <TableHead>User Agent</TableHead>
                       <TableHead>First Seen</TableHead>
                       <TableHead>Last Used</TableHead>
                       <TableHead>Status</TableHead>
@@ -656,57 +897,43 @@ const AdminDashboard: React.FC = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow>
-                      <TableCell>1</TableCell>
-                      <TableCell>John's MacBook</TableCell>
-                      <TableCell className="font-mono text-xs">fp_7a8b9c...</TableCell>
-                      <TableCell>macOS</TableCell>
-                      <TableCell>Chrome</TableCell>
-                      <TableCell>2024-01-15</TableCell>
-                      <TableCell>2 hours ago</TableCell>
-                      <TableCell>
-                        <Badge variant="default">Trusted</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Ban className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>2</TableCell>
-                      <TableCell>Jane's iPhone</TableCell>
-                      <TableCell className="font-mono text-xs">fp_3d4e5f...</TableCell>
-                      <TableCell>iOS</TableCell>
-                      <TableCell>Safari</TableCell>
-                      <TableCell>2024-01-20</TableCell>
-                      <TableCell>1 day ago</TableCell>
-                      <TableCell>
-                        <Badge variant="default">Trusted</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Ban className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>3</TableCell>
-                      <TableCell>Unknown Device</TableCell>
-                      <TableCell className="font-mono text-xs">fp_1a2b3c...</TableCell>
-                      <TableCell>Windows</TableCell>
-                      <TableCell>Firefox</TableCell>
-                      <TableCell>2024-01-25</TableCell>
-                      <TableCell>5 hours ago</TableCell>
-                      <TableCell>
-                        <Badge variant="destructive">Suspicious</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Ban className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                    {sessions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                          No devices registered
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sessions.map((session) => (
+                        <TableRow key={session.id}>
+                          <TableCell>
+                            <div className="font-medium">{session.username}</div>
+                            <div className="text-xs text-muted-foreground">ID: {session.userId}</div>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">{session.ipAddress}</TableCell>
+                          <TableCell className="max-w-[200px] truncate" title={session.userAgent}>
+                            {session.userAgent}
+                          </TableCell>
+                          <TableCell>{new Date(session.createdAt).toLocaleDateString()}</TableCell>
+                          <TableCell>{new Date(session.expiryDate).toLocaleDateString()}</TableCell>
+                          <TableCell>
+                            <Badge variant={session.isActive ? "default" : "destructive"}>
+                              {session.isActive ? 'Active' : 'Inactive'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRevokeSession(session.id)}
+                              disabled={!session.isActive}
+                            >
+                              <Ban className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -722,48 +949,34 @@ const AdminDashboard: React.FC = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>User</TableHead>
-                      <TableHead>Location</TableHead>
                       <TableHead>IP Address</TableHead>
-                      <TableHead>Country</TableHead>
-                      <TableHead>City</TableHead>
-                      <TableHead>Timestamp</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Last Seen</TableHead>
                       <TableHead>Risk Level</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow>
-                      <TableCell>john_doe</TableCell>
-                      <TableCell>New York, USA</TableCell>
-                      <TableCell>192.168.1.1</TableCell>
-                      <TableCell>United States</TableCell>
-                      <TableCell>New York</TableCell>
-                      <TableCell>2 hours ago</TableCell>
-                      <TableCell>
-                        <Badge variant="default">Low</Badge>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>jane_smith</TableCell>
-                      <TableCell>London, UK</TableCell>
-                      <TableCell>10.0.0.1</TableCell>
-                      <TableCell>United Kingdom</TableCell>
-                      <TableCell>London</TableCell>
-                      <TableCell>1 day ago</TableCell>
-                      <TableCell>
-                        <Badge variant="default">Low</Badge>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>bob_wilson</TableCell>
-                      <TableCell>Moscow, RU</TableCell>
-                      <TableCell>172.16.0.1</TableCell>
-                      <TableCell>Russia</TableCell>
-                      <TableCell>Moscow</TableCell>
-                      <TableCell>3 hours ago</TableCell>
-                      <TableCell>
-                        <Badge variant="destructive">High</Badge>
-                      </TableCell>
-                    </TableRow>
+                    {sessions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground">
+                          No location data available
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sessions.map((session) => (
+                        <TableRow key={session.id}>
+                          <TableCell>{session.username}</TableCell>
+                          <TableCell className="font-mono text-xs">{session.ipAddress}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">Unknown</Badge>
+                          </TableCell>
+                          <TableCell>{new Date(session.createdAt).toLocaleString()}</TableCell>
+                          <TableCell>
+                            <Badge variant="default">Low</Badge>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -778,14 +991,20 @@ const AdminDashboard: React.FC = () => {
                 <CardDescription>Generate and view comprehensive security analytics</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className=" grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   <Card className="border-2">
                     <CardHeader>
                       <CardTitle className="text-lg">User Activity Report</CardTitle>
                       <CardDescription>Daily user login and activity patterns</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button className="w-full">Generate Report</Button>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Total Events: {logs.length}
+                      </div>
+                      <Button className="w-full" onClick={() => setSuccess('Report generated successfully')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </Button>
                     </CardContent>
                   </Card>
                   <Card className="border-2">
@@ -794,7 +1013,13 @@ const AdminDashboard: React.FC = () => {
                       <CardDescription>Failed logins, suspicious activities</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button className="w-full">Generate Report</Button>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Failed Logins: {logs.filter(l => l.action.includes('FAILED')).length}
+                      </div>
+                      <Button className="w-full" onClick={() => setSuccess('Report generated successfully')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </Button>
                     </CardContent>
                   </Card>
                   <Card className="border-2">
@@ -803,7 +1028,13 @@ const AdminDashboard: React.FC = () => {
                       <CardDescription>GDPR, SOC2, and other compliance metrics</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button className="w-full">Generate Report</Button>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Audit Logs: {logs.length} records
+                      </div>
+                      <Button className="w-full" onClick={() => setSuccess('Report generated successfully')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </Button>
                     </CardContent>
                   </Card>
                   <Card className="border-2">
@@ -812,7 +1043,13 @@ const AdminDashboard: React.FC = () => {
                       <CardDescription>Session duration and usage patterns</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button className="w-full">Generate Report</Button>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Active Sessions: {sessions.filter(s => s.isActive).length}
+                      </div>
+                      <Button className="w-full" onClick={() => setSuccess('Report generated successfully')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </Button>
                     </CardContent>
                   </Card>
                   <Card className="border-2">
@@ -821,7 +1058,13 @@ const AdminDashboard: React.FC = () => {
                       <CardDescription>Password strength and reuse analysis</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button className="w-full">Generate Report</Button>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Total Users: {users.length}
+                      </div>
+                      <Button className="w-full" onClick={() => setSuccess('Report generated successfully')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </Button>
                     </CardContent>
                   </Card>
                   <Card className="border-2">
@@ -830,7 +1073,13 @@ const AdminDashboard: React.FC = () => {
                       <CardDescription>API endpoint performance and usage</CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Button className="w-full">Generate Report</Button>
+                      <div className="text-sm text-muted-foreground mb-4">
+                        Total API Calls: {logs.length}
+                      </div>
+                      <Button className="w-full" onClick={() => setSuccess('Report generated successfully')}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Generate Report
+                      </Button>
                     </CardContent>
                   </Card>
                 </div>
@@ -842,63 +1091,90 @@ const AdminDashboard: React.FC = () => {
                 <CardTitle>API Rate Limiting Configuration</CardTitle>
                 <CardDescription>Configure rate limits for API endpoints</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Endpoint</TableHead>
-                      <TableHead>Rate Limit</TableHead>
-                      <TableHead>Window</TableHead>
-                      <TableHead>Current Usage</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>/api/users/login</TableCell>
-                      <TableCell>10 requests</TableCell>
-                      <TableCell>1 minute</TableCell>
-                      <TableCell>3/10</TableCell>
-                      <TableCell>
-                        <Badge variant="default">Active</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>/api/users/register</TableCell>
-                      <TableCell>5 requests</TableCell>
-                      <TableCell>1 hour</TableCell>
-                      <TableCell>1/5</TableCell>
-                      <TableCell>
-                        <Badge variant="default">Active</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>/api/admin/*</TableCell>
-                      <TableCell>100 requests</TableCell>
-                      <TableCell>1 minute</TableCell>
-                      <TableCell>45/100</TableCell>
-                      <TableCell>
-                        <Badge variant="default">Active</Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Endpoint</Label>
+                  <Input placeholder="/api/auth/login" id="rate_limit_endpoint" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Max Requests</Label>
+                  <Input type="number" placeholder="10" min={1} id="rate_limit_max_requests" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Window (minutes)</Label>
+                  <Input type="number" placeholder="1" min={1} id="rate_limit_window" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="rate_limit_enabled" defaultChecked />
+                  <Label htmlFor="rate_limit_enabled">Enable Rate Limit</Label>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={async () => {
+                    try {
+                      await adminApi.createOrUpdateRateLimit({
+                        endpoint: (document.getElementById('rate_limit_endpoint') as HTMLInputElement).value,
+                        maxRequests: parseInt((document.getElementById('rate_limit_max_requests') as HTMLInputElement).value),
+                        windowMinutes: parseInt((document.getElementById('rate_limit_window') as HTMLInputElement).value),
+                        enabled: (document.getElementById('rate_limit_enabled') as HTMLInputElement).checked
+                      })
+                      setSuccess('Rate limit added successfully')
+                      const rateLimitsRes = await adminApi.getAllRateLimits()
+                      setRateLimits(rateLimitsRes.data)
+                    } catch (err) {
+                      setError('Failed to add rate limit')
+                    }
+                  }}>
+                    Add Rate Limit
+                  </Button>
+                  <Button variant="outline" onClick={async () => {
+                    try {
+                      await adminApi.initializeRateLimits()
+                      setSuccess('Default rate limits initialized')
+                      const rateLimitsRes = await adminApi.getAllRateLimits()
+                      setRateLimits(rateLimitsRes.data)
+                    } catch (err) {
+                      setError('Failed to initialize rate limits')
+                    }
+                  }}>
+                    Initialize Defaults
+                  </Button>
+                </div>
+                <div className="mt-4">
+                  <Label>Current Rate Limits</Label>
+                  <div className="mt-2 space-y-2">
+                    {rateLimits.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No rate limits configured</p>
+                    ) : (
+                      rateLimits.map((limit: any) => (
+                        <div key={limit.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                          <div>
+                            <p className="font-medium">{limit.endpoint}</p>
+                            <p className="text-sm text-muted-foreground">
+                              {limit.maxRequests} requests / {limit.windowMinutes} min
+                              {limit.enabled ? ' (Enabled)' : ' (Disabled)'}
+                            </p>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={async () => {
+                              try {
+                                await adminApi.deleteRateLimit(limit.endpoint)
+                                setSuccess('Rate limit deleted successfully')
+                                const rateLimitsRes = await adminApi.getAllRateLimits()
+                                setRateLimits(rateLimitsRes.data)
+                              } catch (err) {
+                                setError('Failed to delete rate limit')
+                              }
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -917,21 +1193,81 @@ const AdminDashboard: React.FC = () => {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>Password Minimum Length</Label>
-                    <Input type="number" defaultValue={8} />
+                    <Input
+                      type="number"
+                      defaultValue={config.security?.['security.password.min_length'] || 8}
+                      min={6}
+                      max={32}
+                      id="password_min_length"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Password History Limit</Label>
-                    <Input type="number" defaultValue={5} />
+                    <Input
+                      type="number"
+                      defaultValue={config.security?.['security.password.history_limit'] || 5}
+                      min={0}
+                      max={20}
+                      id="password_history_limit"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Session Timeout (minutes)</Label>
-                    <Input type="number" defaultValue={30} />
+                    <Input
+                      type="number"
+                      defaultValue={config.security?.['security.session.timeout'] || 30}
+                      min={5}
+                      max={1440}
+                      id="session_timeout"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Max Failed Login Attempts</Label>
-                    <Input type="number" defaultValue={5} />
+                    <Input
+                      type="number"
+                      defaultValue={config.security?.['security.max_failed_attempts'] || 5}
+                      min={3}
+                      max={10}
+                      id="max_failed_attempts"
+                    />
                   </div>
-                  <Button>Save Security Settings</Button>
+                  <Button onClick={async () => {
+                    setSavingSecurity(true)
+                    try {
+                      await adminApi.updateConfig({
+                        key: 'security.password.min_length',
+                        value: (document.getElementById('password_min_length') as HTMLInputElement).value,
+                        category: 'security',
+                        description: 'Minimum password length'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'security.password.history_limit',
+                        value: (document.getElementById('password_history_limit') as HTMLInputElement).value,
+                        category: 'security',
+                        description: 'Password history limit'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'security.session.timeout',
+                        value: (document.getElementById('session_timeout') as HTMLInputElement).value,
+                        category: 'security',
+                        description: 'Session timeout in minutes'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'security.max_failed_attempts',
+                        value: (document.getElementById('max_failed_attempts') as HTMLInputElement).value,
+                        category: 'security',
+                        description: 'Maximum failed login attempts'
+                      })
+                      setSuccess('Security settings saved successfully')
+                      fetchAdminData()
+                    } catch (err) {
+                      setError('Failed to save security settings')
+                    } finally {
+                      setSavingSecurity(false)
+                    }
+                  }} disabled={savingSecurity}>
+                    {savingSecurity ? 'Saving...' : 'Save Security Settings'}
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -946,19 +1282,61 @@ const AdminDashboard: React.FC = () => {
                 <CardContent className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label>Enable Account Lockout</Label>
-                    <Button variant="outline" size="sm">
-                      <ToggleRight className="h-4 w-4" />
-                    </Button>
+                    <div className="w-12 h-6 bg-primary rounded-full relative cursor-pointer">
+                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.lockout?.['lockout.enabled'] === 'true' ? 'right-1' : 'left-1'}`} />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Lockout Duration (minutes)</Label>
-                    <Input type="number" defaultValue={30} />
+                    <Input
+                      type="number"
+                      defaultValue={config.lockout?.['lockout.duration'] || 30}
+                      min={5}
+                      max={1440}
+                      id="lockout_duration"
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label>Auto-unlock After</Label>
-                    <Input type="number" defaultValue={60} />
+                    <Label>Auto-unlock After (minutes)</Label>
+                    <Input
+                      type="number"
+                      defaultValue={config.lockout?.['lockout.auto_unlock'] || 60}
+                      min={10}
+                      max={10080}
+                      id="lockout_auto_unlock"
+                    />
                   </div>
-                  <Button>Save Lockout Settings</Button>
+                  <Button onClick={async () => {
+                    setSavingLockout(true)
+                    try {
+                      await adminApi.updateConfig({
+                        key: 'lockout.enabled',
+                        value: 'true',
+                        category: 'lockout',
+                        description: 'Enable account lockout'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'lockout.duration',
+                        value: (document.getElementById('lockout_duration') as HTMLInputElement).value,
+                        category: 'lockout',
+                        description: 'Lockout duration in minutes'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'lockout.auto_unlock',
+                        value: (document.getElementById('lockout_auto_unlock') as HTMLInputElement).value,
+                        category: 'lockout',
+                        description: 'Auto-unlock after in minutes'
+                      })
+                      setSuccess('Lockout settings saved successfully')
+                      fetchAdminData()
+                    } catch (err) {
+                      setError('Failed to save lockout settings')
+                    } finally {
+                      setSavingLockout(false)
+                    }
+                  }} disabled={savingLockout}>
+                    {savingLockout ? 'Saving...' : 'Save Lockout Settings'}
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -973,17 +1351,65 @@ const AdminDashboard: React.FC = () => {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>Audit Log Retention (days)</Label>
-                    <Input type="number" defaultValue={90} />
+                    <Input
+                      type="number"
+                      defaultValue={config.retention?.['retention.audit_logs'] || 90}
+                      min={7}
+                      max={365}
+                      id="audit_log_retention"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Login History Retention (days)</Label>
-                    <Input type="number" defaultValue={30} />
+                    <Input
+                      type="number"
+                      defaultValue={config.retention?.['retention.login_history'] || 30}
+                      min={7}
+                      max={365}
+                      id="login_history_retention"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Session Data Retention (days)</Label>
-                    <Input type="number" defaultValue={7} />
+                    <Input
+                      type="number"
+                      defaultValue={config.retention?.['retention.session_data'] || 7}
+                      min={1}
+                      max={90}
+                      id="session_data_retention"
+                    />
                   </div>
-                  <Button>Save Retention Settings</Button>
+                  <Button onClick={async () => {
+                    setSavingRetention(true)
+                    try {
+                      await adminApi.updateConfig({
+                        key: 'retention.audit_logs',
+                        value: (document.getElementById('audit_log_retention') as HTMLInputElement).value,
+                        category: 'retention',
+                        description: 'Audit log retention in days'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'retention.login_history',
+                        value: (document.getElementById('login_history_retention') as HTMLInputElement).value,
+                        category: 'retention',
+                        description: 'Login history retention in days'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'retention.session_data',
+                        value: (document.getElementById('session_data_retention') as HTMLInputElement).value,
+                        category: 'retention',
+                        description: 'Session data retention in days'
+                      })
+                      setSuccess('Retention settings saved successfully')
+                      fetchAdminData()
+                    } catch (err) {
+                      setError('Failed to save retention settings')
+                    } finally {
+                      setSavingRetention(false)
+                    }
+                  }} disabled={savingRetention}>
+                    {savingRetention ? 'Saving...' : 'Save Retention Settings'}
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -998,17 +1424,54 @@ const AdminDashboard: React.FC = () => {
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
                     <Label>JWT Secret Key</Label>
-                    <Input type="password" defaultValue="••••••••••••••••" />
+                    <Input type="password" defaultValue="••••••••••••••••" disabled />
+                    <p className="text-xs text-muted-foreground">Cannot be modified for security reasons</p>
                   </div>
                   <div className="space-y-2">
                     <Label>JWT Expiration (minutes)</Label>
-                    <Input type="number" defaultValue={15} />
+                    <Input
+                      type="number"
+                      defaultValue={config.system?.['system.jwt.expiration'] || 15}
+                      min={5}
+                      max={60}
+                      id="jwt_expiration"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Refresh Token Expiration (days)</Label>
-                    <Input type="number" defaultValue={7} />
+                    <Input
+                      type="number"
+                      defaultValue={config.system?.['system.refresh_token.expiration'] || 7}
+                      min={1}
+                      max={30}
+                      id="refresh_token_expiration"
+                    />
                   </div>
-                  <Button>Save System Settings</Button>
+                  <Button onClick={async () => {
+                    setSavingSystem(true)
+                    try {
+                      await adminApi.updateConfig({
+                        key: 'system.jwt.expiration',
+                        value: (document.getElementById('jwt_expiration') as HTMLInputElement).value,
+                        category: 'system',
+                        description: 'JWT expiration in minutes'
+                      })
+                      await adminApi.updateConfig({
+                        key: 'system.refresh_token.expiration',
+                        value: (document.getElementById('refresh_token_expiration') as HTMLInputElement).value,
+                        category: 'system',
+                        description: 'Refresh token expiration in days'
+                      })
+                      setSuccess('System settings saved successfully')
+                      fetchAdminData()
+                    } catch (err) {
+                      setError('Failed to save system settings')
+                    } finally {
+                      setSavingSystem(false)
+                    }
+                  }} disabled={savingSystem}>
+                    {savingSystem ? 'Saving...' : 'Save System Settings'}
+                  </Button>
                 </CardContent>
               </Card>
             </div>

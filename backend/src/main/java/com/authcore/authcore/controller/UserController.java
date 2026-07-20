@@ -32,14 +32,16 @@ public class UserController {
     private final com.authcore.authcore.service.PasswordResetService passwordResetService;
     private final com.authcore.authcore.service.AuditLogService auditLogService;
     private final MfaService mfaService;
+    private final com.authcore.authcore.service.LoginLocationService loginLocationService;
 
-    public UserController(UserService userService, JwtService jwtService, com.authcore.authcore.service.RefreshTokenService refreshTokenService, com.authcore.authcore.service.PasswordResetService passwordResetService, com.authcore.authcore.service.AuditLogService auditLogService, MfaService mfaService) {
+    public UserController(UserService userService, JwtService jwtService, com.authcore.authcore.service.RefreshTokenService refreshTokenService, com.authcore.authcore.service.PasswordResetService passwordResetService, com.authcore.authcore.service.AuditLogService auditLogService, MfaService mfaService, com.authcore.authcore.service.LoginLocationService loginLocationService) {
         this.userService = userService;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
         this.passwordResetService = passwordResetService;
         this.auditLogService = auditLogService;
         this.mfaService = mfaService;
+        this.loginLocationService = loginLocationService;
     }
 
     @PostMapping("/register")
@@ -57,16 +59,64 @@ public class UserController {
         String ipAddress = getClientIpAddress(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
 
-        // Check if MFA is enabled
-        if (mfaService.isEnabled(user)) {
-            String challengeToken = mfaService.createLoginChallenge(user);
-            auditLogService.logEvent(user, "USER_LOGIN_MFA_REQUIRED", "User", user.getId(), ipAddress, "MFA required for login");
-            return ResponseEntity.ok(LoginResponse.mfaRequired(challengeToken));
+        // Check for new location security risk
+        boolean isNewLocation = false;
+        boolean isNewCity = false;
+        boolean isNewCountry = false;
+        
+        if (request.latitude() != null && request.longitude() != null) {
+            isNewLocation = loginLocationService.isNewLocation(user.getId(), request.latitude(), request.longitude());
         }
 
         // Normal login flow
         String token = jwtService.generateToken(user.getEmail());
         var refresh = refreshTokenService.createRefreshToken(user, ipAddress, userAgent);
+        
+        // Record login location
+        com.authcore.authcore.entity.LoginLocation loginLocation = null;
+        try {
+            loginLocation = loginLocationService.recordLoginLocation(
+                user.getId(),
+                refresh.getId(),
+                request.latitude(),
+                request.longitude(),
+                request.accuracy(),
+                request.altitude(),
+                request.heading(),
+                request.speed(),
+                httpRequest
+            );
+            
+            // Check for new city/country after recording
+            if (loginLocation.getCity() != null) {
+                isNewCity = loginLocationService.isNewCity(user.getId(), loginLocation.getCity());
+            }
+            if (loginLocation.getCountry() != null) {
+                isNewCountry = loginLocationService.isNewCountry(user.getId(), loginLocation.getCountry());
+            }
+        } catch (Exception e) {
+            // Don't fail login if location recording fails
+            System.err.println("Failed to record login location: " + e.getMessage());
+        }
+
+        // Check if MFA should be required due to new location
+        boolean requiresMfa = mfaService.isEnabled(user);
+        
+        // Log new location detection even if MFA is not enabled
+        if (isNewLocation || isNewCity || isNewCountry) {
+            String reason = isNewLocation ? "New location detected" : 
+                           (isNewCity ? "New city detected" : "New country detected");
+            auditLogService.logEvent(user, "USER_LOGIN_NEW_LOCATION", "User", user.getId(), ipAddress, 
+                "Suspicious login: " + reason + " (MFA not enabled)");
+        }
+
+        if (requiresMfa) {
+            String challengeToken = mfaService.createLoginChallenge(user);
+            auditLogService.logEvent(user, "USER_LOGIN_MFA_REQUIRED", "User", user.getId(), ipAddress, 
+                "MFA required for login: MFA enabled");
+            return ResponseEntity.ok(LoginResponse.mfaRequired(challengeToken));
+        }
+        
         auditLogService.logEvent(user, "USER_LOGIN", "User", user.getId(), ipAddress, "User logged in successfully");
         return ResponseEntity.ok(new AuthResponse(token, refresh.getToken(), "success"));
     }
