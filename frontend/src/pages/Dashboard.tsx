@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input'
 import { LogOut, User, Shield, Clock, Globe, Key, FileText, CheckCircle2, AlertCircle, X, ShieldCheck } from 'lucide-react'
 import { sessionApi, oauthApi, authApi } from '../services/api'
+import { getApiErrorMessage } from '../lib/errors'
 import config from '../config/env'
 
 
@@ -81,7 +82,7 @@ const Dashboard: React.FC = () => {
       await sessionApi.revokeSession(token)
       setSessions((prev) => prev.filter((s) => s.token !== token))
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to revoke session.')
+      setError(getApiErrorMessage(err, 'Failed to revoke session.'))
     }
   }
 
@@ -103,7 +104,7 @@ const Dashboard: React.FC = () => {
       setNewPassword('')
       setConfirmPassword('')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to change password.')
+      setError(getApiErrorMessage(err, 'Failed to change password.'))
     } finally {
       setLoading(false)
     }
@@ -116,7 +117,7 @@ const Dashboard: React.FC = () => {
       const logsRes = await authApi.getMyAuditLogs()
       setLogs(logsRes.data)
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to load login history.')
+      setError(getApiErrorMessage(err, 'Failed to load login history.'))
     } finally {
       setLoading(false)
     }
@@ -130,7 +131,7 @@ const Dashboard: React.FC = () => {
       setSuccess(`Successfully unlinked your ${provider} account.`)
       fetchData()
     } catch (err: any) {
-      setError(err.response?.data?.error || `Failed to unlink ${provider} account.`)
+      setError(getApiErrorMessage(err, `Failed to unlink ${provider} account.`))
     }
   }
 

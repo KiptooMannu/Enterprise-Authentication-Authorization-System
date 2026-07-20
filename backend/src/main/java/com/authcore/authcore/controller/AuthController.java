@@ -5,6 +5,8 @@ import com.authcore.authcore.security.AuthResponse;
 import com.authcore.authcore.security.JwtService;
 import com.authcore.authcore.service.RefreshTokenService;
 import com.authcore.authcore.service.UserService;
+import com.authcore.authcore.util.ApiResponses;
+import com.authcore.authcore.util.HttpRequestUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -34,13 +36,13 @@ public class AuthController {
     @PostMapping("/refresh")
     public ResponseEntity<?> refresh(@RequestBody Map<String, String> body) {
         String token = body.get("refreshToken");
-        if (token == null) return ResponseEntity.badRequest().body(Map.of("error", "refreshToken required"));
+        if (token == null) return ResponseEntity.badRequest().body(ApiResponses.error("refreshToken required"));
         try {
             var newRefresh = refreshTokenService.refreshToken(token);
             String newAccess = jwtService.generateToken(newRefresh.getUser().getEmail());
             return ResponseEntity.ok(new AuthResponse(newAccess, newRefresh.getToken(), "refreshed"));
         } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(401).body(Map.of("error", ex.getMessage()));
+            return ResponseEntity.status(401).body(ApiResponses.error(ex.getMessage()));
         }
     }
 
@@ -50,36 +52,35 @@ public class AuthController {
             UserEntity user = userService.findByEmail(authentication.getName());
             blacklistCurrentAccessToken(request);
             refreshTokenService.deleteByUser(user);
-            return ResponseEntity.ok(Map.of("status", "logged out"));
+            return ResponseEntity.ok(ApiResponses.status("logged out"));
         }
 
         if (body != null) {
             String email = body.get("email");
-            if (email == null) return ResponseEntity.badRequest().body(Map.of("error", "email required"));
+            if (email == null) return ResponseEntity.badRequest().body(ApiResponses.error("email required"));
             UserEntity user = userService.findByEmail(email);
             refreshTokenService.deleteByUser(user);
-            return ResponseEntity.ok(Map.of("status", "logged out"));
+            return ResponseEntity.ok(ApiResponses.status("logged out"));
         }
 
-        return ResponseEntity.badRequest().body(Map.of("error", "authentication required"));
+        return ResponseEntity.badRequest().body(ApiResponses.error("authentication required"));
     }
 
     @PostMapping("/logout-all")
     public ResponseEntity<?> logoutAll(HttpServletRequest request, Authentication authentication) {
         if (authentication == null || !authentication.isAuthenticated()) {
-            return ResponseEntity.status(401).body(Map.of("error", "authentication required"));
+            return ResponseEntity.status(401).body(ApiResponses.error("authentication required"));
         }
 
         UserEntity user = userService.findByEmail(authentication.getName());
         blacklistCurrentAccessToken(request);
         refreshTokenService.deleteByUser(user);
-        return ResponseEntity.ok(Map.of("status", "all sessions logged out"));
+        return ResponseEntity.ok(ApiResponses.status("all sessions logged out"));
     }
 
     private void blacklistCurrentAccessToken(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
+        String token = HttpRequestUtils.extractBearerToken(request);
+        if (token != null) {
             try {
                 java.util.Date expiryDate = jwtService.extractExpiration(token);
                 tokenBlacklistService.blacklist(token, expiryDate.toInstant());
@@ -93,20 +94,20 @@ public class AuthController {
     public ResponseEntity<?> revoke(@RequestBody Map<String, String> body) {
         String token = body.get("token");
         String type = body.getOrDefault("type", "access");
-        if (token == null) return ResponseEntity.badRequest().body(Map.of("error", "token required"));
+        if (token == null) return ResponseEntity.badRequest().body(ApiResponses.error("token required"));
 
         if ("refresh".equalsIgnoreCase(type)) {
             refreshTokenService.deleteByToken(token);
-            return ResponseEntity.ok(Map.of("status", "refresh token revoked"));
+            return ResponseEntity.ok(ApiResponses.status("refresh token revoked"));
         }
 
         try {
             java.util.Date d = jwtService.extractExpiration(token);
             java.time.Instant expiry = d.toInstant();
             tokenBlacklistService.blacklist(token, expiry);
-            return ResponseEntity.ok(Map.of("status", "access token revoked"));
+            return ResponseEntity.ok(ApiResponses.status("access token revoked"));
         } catch (Exception ex) {
-            return ResponseEntity.badRequest().body(Map.of("error", "invalid token"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("invalid token"));
         }
     }
 }

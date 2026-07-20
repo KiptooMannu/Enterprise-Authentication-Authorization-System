@@ -6,6 +6,7 @@ import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.entity.UserRole;
 import com.authcore.authcore.service.AuditLogService;
 import com.authcore.authcore.service.UserService;
+import com.authcore.authcore.util.HttpRequestUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -30,7 +31,7 @@ public class AdminController {
     @GetMapping("/users")
     public List<UserResponse> listUsers() {
         return userService.findAllUsers().stream()
-            .map(this::toUserResponse)
+            .map(UserResponse::from)
             .collect(Collectors.toList());
     }
 
@@ -38,24 +39,24 @@ public class AdminController {
     public UserResponse updateRole(@PathVariable Long id, @RequestParam UserRole role, Authentication authentication, HttpServletRequest httpRequest) {
         UserEntity targetUser = userService.findById(id);
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         
         UserEntity user = userService.updateUserRole(id, role);
         auditLogService.logEvent(adminUser, "ROLE_UPDATED", "User", id, ipAddress, 
             "Updated role for user " + targetUser.getEmail() + " to " + role);
-        return toUserResponse(user);
+        return UserResponse.from(user);
     }
 
     @PutMapping("/users/{id}/status")
     public UserResponse updateStatus(@PathVariable Long id, @RequestParam boolean enabled, Authentication authentication, HttpServletRequest httpRequest) {
         UserEntity targetUser = userService.findById(id);
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         
         UserEntity user = userService.updateUserStatus(id, enabled);
         auditLogService.logEvent(adminUser, "STATUS_UPDATED", "User", id, ipAddress, 
             "Updated status for user " + targetUser.getEmail() + " to " + (enabled ? "enabled" : "disabled"));
-        return toUserResponse(user);
+        return UserResponse.from(user);
     }
 
     @GetMapping("/audit-logs")
@@ -67,17 +68,5 @@ public class AdminController {
     public List<AuditLog> getUserAuditLogs(@PathVariable Long userId) {
         UserEntity user = userService.findById(userId);
         return auditLogService.getUserAuditLogs(user);
-    }
-
-    private UserResponse toUserResponse(UserEntity user) {
-        return new UserResponse(user.getId(), user.getUsername(), user.getEmail(), user.getRole(), user.isEnabled(), user.getCreatedAt());
-    }
-
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

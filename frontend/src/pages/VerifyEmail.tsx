@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { authApi } from '../services/api'
+import { getApiErrorMessage } from '../lib/errors'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/button'
@@ -26,7 +27,7 @@ const VerifyEmail: React.FC = () => {
         setMessage(response.data.message || 'Your email address has been verified successfully.')
       } catch (error: any) {
         setStatus('error')
-        setMessage(error.response?.data?.message || 'Invalid or expired verification token.')
+        setMessage(getApiErrorMessage(error, 'Invalid or expired verification token.'))
       }
     }
 

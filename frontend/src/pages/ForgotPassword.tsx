@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../services/api'
+import { getApiErrorMessage } from '../lib/errors'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -22,7 +23,7 @@ const ForgotPassword: React.FC = () => {
       await authApi.forgotPassword(email)
       setSuccess('A password reset link has been sent to your email address.')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to request password reset. Check if email is correct.')
+      setError(getApiErrorMessage(err, 'Failed to request password reset. Check if email is correct.'))
     } finally {
       setLoading(false)
     }

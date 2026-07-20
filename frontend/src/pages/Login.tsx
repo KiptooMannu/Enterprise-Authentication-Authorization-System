@@ -6,6 +6,7 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Lock, Mail, AlertCircle, Shield } from 'lucide-react'
+import { getApiErrorMessage } from '../lib/errors'
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('')
@@ -74,7 +75,7 @@ const Login: React.FC = () => {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.')
+      setError(getApiErrorMessage(err, 'Login failed. Please try again.'))
     } finally {
       setLoading(false)
     }

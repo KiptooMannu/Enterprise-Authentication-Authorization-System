@@ -30,12 +30,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @org.springframework.lang.NonNull HttpServletRequest request,
             @org.springframework.lang.NonNull HttpServletResponse response,
             @org.springframework.lang.NonNull FilterChain filterChain) throws ServletException, IOException {
-        final String authHeader = request.getHeader("Authorization");
         String username = null;
-        String jwt = null;
+        String jwt = com.authcore.authcore.util.HttpRequestUtils.extractBearerToken(request);
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            jwt = authHeader.substring(7);
+        if (jwt != null) {
             username = jwtService.extractUsername(jwt);
         }
 
