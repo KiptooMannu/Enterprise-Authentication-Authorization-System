@@ -6,6 +6,8 @@ import com.authcore.authcore.security.JwtService;
 import com.authcore.authcore.service.RefreshTokenService;
 import com.authcore.authcore.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,6 +20,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 public class AuthController {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthController.class);
 
     private final RefreshTokenService refreshTokenService;
     private final JwtService jwtService;
@@ -83,8 +87,9 @@ public class AuthController {
             try {
                 java.util.Date expiryDate = jwtService.extractExpiration(token);
                 tokenBlacklistService.blacklist(token, expiryDate.toInstant());
-            } catch (Exception ignored) {
-                // Token may already be invalid or expired.
+            } catch (Exception ex) {
+                // Token may already be invalid or expired; nothing to blacklist. Record for diagnostics.
+                log.debug("Could not blacklist access token during logout: {}", ex.getMessage());
             }
         }
     }
@@ -106,6 +111,7 @@ public class AuthController {
             tokenBlacklistService.blacklist(token, expiry);
             return ResponseEntity.ok(Map.of("status", "access token revoked"));
         } catch (Exception ex) {
+            log.debug("Failed to revoke access token: {}", ex.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", "invalid token"));
         }
     }

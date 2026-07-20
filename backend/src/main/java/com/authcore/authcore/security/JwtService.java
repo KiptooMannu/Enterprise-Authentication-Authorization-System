@@ -4,6 +4,8 @@ import com.auth0.jwt.JWT;
 import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.interfaces.DecodedJWT;
 import com.auth0.jwt.interfaces.JWTVerifier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -11,6 +13,8 @@ import java.util.Date;
 
 @Service
 public class JwtService {
+
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
 
     private final Algorithm algorithm;
     private final JWTVerifier verifier;
@@ -42,6 +46,8 @@ public class JwtService {
             String extracted = extractUsername(token);
             return username.equals(extracted) && !isTokenExpired(token);
         } catch (Exception ex) {
+            // An unverifiable/expired token is simply not valid; keep the detail at debug level.
+            log.debug("Token validation failed: {}", ex.getMessage());
             return false;
         }
     }

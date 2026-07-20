@@ -4,6 +4,8 @@ import com.authcore.authcore.entity.PasswordReset;
 import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.repository.PasswordResetRepository;
 import com.authcore.authcore.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -18,6 +20,8 @@ import java.util.UUID;
 
 @Service
 public class PasswordResetService {
+
+    private static final Logger log = LoggerFactory.getLogger(PasswordResetService.class);
 
     private final PasswordResetRepository passwordResetRepository;
     private final UserRepository userRepository;
@@ -97,7 +101,9 @@ public class PasswordResetService {
         try {
             mailSender.send(message);
         } catch (Exception e) {
-            System.err.println("Failed to send password reset email: " + e.getMessage());
+            // Don't throw - the reset token is already persisted and the response must not
+            // reveal whether the address exists. Preserve the stack trace for diagnostics.
+            log.error("Failed to send password reset email to {}", toEmail, e);
         }
     }
 }
