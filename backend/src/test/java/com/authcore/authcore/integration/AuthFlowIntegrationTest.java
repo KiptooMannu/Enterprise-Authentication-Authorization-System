@@ -30,7 +30,7 @@ public class AuthFlowIntegrationTest {
         assertTrue(r1.getStatusCode().is2xxSuccessful());
 
         // login
-        LoginRequest login = new LoginRequest(uniqueEmail, "password");
+        LoginRequest login = new LoginRequest(uniqueEmail, "password", null, null, null, null, null, null);
         ResponseEntity<AuthResponse> loginResp = restTemplate.postForEntity("/api/users/login", login,
                 AuthResponse.class);
         assertEquals(HttpStatus.OK, loginResp.getStatusCode());

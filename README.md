@@ -38,9 +38,19 @@ A production-ready, full-stack authentication system built with Spring Boot (bac
 ### Admin Dashboard
 
 - **Dashboard Statistics** - User counts, verification status, and analytics
-- **User Management** - View, edit, and delete users
-- **Role Management** - Assign and modify user roles
+- **User Management** - View, edit, and delete users with role assignment
+- **Role Management** - Assign and modify user roles (USER, ADMIN, MANAGER)
 - **Search & Filter** - Find users by name, email, or role
+- **Session Management** - View and revoke active user sessions
+- **Device Fingerprinting** - Monitor registered devices across the platform
+- **Geolocation Tracking** - Track login locations and detect suspicious activity
+- **Security Reports** - Generate comprehensive security analytics
+- **API Rate Limiting** - Configure rate limits for API endpoints
+- **Security Policies** - Configure password and session security settings
+- **Account Lockout** - Configure automatic account lockout settings
+- **Data Retention** - Configure audit log and session data retention
+- **System Configuration** - Manage JWT expiration and token settings
+- **Audit Logs** - Complete system activity history with filtering
 - **Threat Detection** - Monitor and detect suspicious activities
 - **Analytics Tracking** - Comprehensive usage analytics
 
@@ -310,12 +320,10 @@ The application uses PostgreSQL with Spring Data JPA. Core entities include:
 
 | Entity | Table | Description |
 |---|---|---|
-| User | users | User accounts with roles |
-| Role | roles | Available user roles |
-| Account | accounts | OAuth/credential accounts |
-| Session | sessions | User sessions |
-| Verification | verifications | Email/password tokens |
-| Audit | audit_logs | Security audit logs |
+| UserEntity | users | User accounts with roles and MFA |
+| RefreshToken | refresh_tokens | JWT refresh tokens for sessions |
+| AuditLog | audit_logs | Security audit logs |
+| SystemConfig | system_config | System configuration settings |
 
 **User Entity with Roles:**
 
@@ -426,14 +434,16 @@ Spring Security with JWT is configured to handle:
 
 | Method | Endpoint | Description | Auth Required |
 |---|---|---|---|
-| GET | /admin/stats | Get dashboard statistics | ✅ Admin |
-| GET | /admin/users | List all users (paginated) | ✅ Admin |
-| GET | /admin/users/:id | Get user by ID | ✅ Admin |
-| PUT | /admin/users/:id | Update user | ✅ Admin |
-| PATCH | /admin/users/:id/role | Update user role | ✅ Admin |
-| DELETE | /admin/users/:id | Delete user | ✅ Admin |
+| GET | /admin/users | List all users | ✅ Admin |
+| PUT | /admin/users/:id/role | Update user role | ✅ Admin |
+| PUT | /admin/users/:id/status | Update user status | ✅ Admin |
 | GET | /admin/audit-logs | View audit logs | ✅ Admin |
-| GET | /admin/threats | View detected threats | ✅ Admin |
+| GET | /admin/sessions | List all active sessions | ✅ Admin |
+| DELETE | /admin/sessions/:id | Revoke a session | ✅ Admin |
+| GET | /admin/config | Get all system configurations | ✅ Admin |
+| GET | /admin/config/:category | Get configs by category | ✅ Admin |
+| PUT | /admin/config | Update configuration | ✅ Admin |
+| POST | /admin/config/initialize | Initialize default configs | ✅ Admin |
 
 ### RBAC Authorization
 
@@ -699,6 +709,15 @@ docker exec -it authcore-db psql -U postgres -d authcore_db
 
 ### Creating an Admin User
 
+**Method 1: Via Admin Dashboard**
+
+1. Register a new user through the UI
+2. Log in as an existing admin
+3. Navigate to Admin Dashboard → Users
+4. Find the new user and change their role to ADMIN
+
+**Method 2: Direct Database Update**
+
 1. Register a new user through the UI
 2. Connect to the database:
    ```bash
@@ -708,6 +727,10 @@ docker exec -it authcore-db psql -U postgres -d authcore_db
    ```sql
    UPDATE users SET role = 'ADMIN' WHERE email = 'your-email@example.com';
    ```
+
+**Default Admin User**
+
+The first registered user can be promoted to admin using either method above. It's recommended to have at least one admin account for system management.
 
 ## 🚢 Deployment
 
@@ -894,24 +917,35 @@ Spring Security handles:
 - JWT token generation and validation
 - CORS configuration
 - CSRF protection
-- Session management
+- Session management with refresh tokens
 
 ### RBAC Pattern
 
 The Role-Based Access Control follows this pattern:
 
-1. Define Roles in `UserRole` enum
+1. Define Roles in `UserRole` enum (USER, ADMIN, MANAGER)
 2. Annotate Controllers with `@PreAuthorize("hasRole('ROLE_NAME')")`
 3. Spring Security checks user roles automatically
+4. Frontend routes protected with role-based guards
 
 ### JWT Token Flow
 
 1. User logs in with credentials
-2. Backend validates and generates JWT
-3. JWT stored in HTTP-only cookie
-4. Frontend includes token in Authorization header
-5. Backend validates token on each request
-6. Token refreshed before expiration
+2. Backend validates and generates JWT access token + refresh token
+3. Refresh token stored in database, access token returned to client
+4. Client stores access token in memory/HTTP-only cookie
+5. Frontend includes token in Authorization header
+6. Backend validates token on each request
+7. Access token refreshed using refresh token before expiration
+
+### Session Management
+
+Sessions are managed via refresh tokens stored in the database:
+- **Refresh Tokens**: Long-lived tokens for session renewal
+- **Access Tokens**: Short-lived JWTs for API authentication
+- **Session Revocation**: Admins can revoke individual sessions
+- **Device Tracking**: IP address and user agent tracking per session
+- **Automatic Cleanup**: Expired tokens are automatically removed
 
 ### Component-Based Routing
 
@@ -927,6 +961,39 @@ React Router provides:
 - `AuthContext` - Global authentication state
 - Component-level state for UI interactions
 - TanStack Query for server state
+
+### Security Configuration System
+
+The application includes a comprehensive security configuration system that allows administrators to manage security policies without code changes:
+
+**Configuration Categories:**
+
+1. **Security Policies**
+   - Password Minimum Length: Enforces minimum password complexity
+   - Password History Limit: Prevents password reuse
+   - Session Timeout: Auto-logout inactive users
+   - Max Failed Login Attempts: Triggers lockout after threshold
+
+2. **Account Lockout**
+   - Enable Account Lockout: Automatic account disabling
+   - Lockout Duration: How long accounts remain locked
+   - Auto-unlock After: Automatic account re-enablement
+
+3. **Data Retention**
+   - Audit Log Retention: How long to keep security logs
+   - Login History Retention: User login tracking duration
+   - Session Data Retention: Token storage duration
+
+4. **System Configuration**
+   - JWT Expiration: Access token lifetime
+   - Refresh Token Expiration: Session renewal duration
+
+**Benefits:**
+- **Compliance**: Meets industry security standards (GDPR, SOC2)
+- **Flexibility**: Adjust security policies without deployments
+- **Audit Trail**: All configuration changes are logged
+- **Defense in Depth**: Multiple security layers working together
+- **Risk Management**: Configurable thresholds based on organization needs
 
 ## 🔧 Troubleshooting
 

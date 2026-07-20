@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { authApi, mfaApi } from '../services/api'
+import { GeolocationData } from '../services/geolocationService'
 
 interface User {
   id: number
@@ -13,7 +14,7 @@ interface User {
 interface AuthContextType {
   user: User | null
   loading: boolean
-  login: (email: string, password: string) => Promise<{ mfaRequired: boolean; mfaChallengeToken?: string }>
+  login: (email: string, password: string, location?: GeolocationData | null) => Promise<{ mfaRequired: boolean; mfaChallengeToken?: string }>
   verifyMfaLogin: (challengeToken: string, code: string) => Promise<void>
   register: (username: string, email: string, password: string) => Promise<void>
   logout: () => void
@@ -45,8 +46,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLoading(false)
   }
 
-  const login = async (email: string, password: string) => {
-    const response = await authApi.login(email, password)
+  const login = async (email: string, password: string, location?: GeolocationData | null) => {
+    const response = await authApi.login(email, password, location)
     const data = response.data
 
     // Check if MFA is required

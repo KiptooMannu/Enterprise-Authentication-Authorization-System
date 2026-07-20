@@ -5,7 +5,8 @@ import config from '../config/env'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
-import { Lock, Mail, AlertCircle, Shield } from 'lucide-react'
+import { Lock, Mail, AlertCircle, Shield, MapPin } from 'lucide-react'
+import { geolocationService, GeolocationData } from '../services/geolocationService'
 import { getApiErrorMessage } from '../lib/errors'
 
 const Login: React.FC = () => {
@@ -17,6 +18,9 @@ const Login: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [mfaRequired, setMfaRequired] = useState(false)
   const [mfaChallengeToken, setMfaChallengeToken] = useState('')
+  const [locationData, setLocationData] = useState<GeolocationData | null>(null)
+  const [acquiringLocation, setAcquiringLocation] = useState(false)
+  const [locationError, setLocationError] = useState('')
   const { login, verifyMfaLogin } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -40,6 +44,7 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
+    setLocationError('')
 
     if (!navigator.onLine) {
       setError('Network error: No internet connection. Please check your network and try again.')
@@ -47,8 +52,14 @@ const Login: React.FC = () => {
     }
 
     setLoading(true)
+    setAcquiringLocation(true)
 
     try {
+      // Acquire location before login
+      const location = await geolocationService.getCurrentLocation(10000)
+      setLocationData(location)
+      setAcquiringLocation(false)
+
       if (mfaRequired) {
         // Verify MFA code
         await verifyMfaLogin(mfaChallengeToken, mfaCode)
@@ -59,8 +70,8 @@ const Login: React.FC = () => {
         }
         navigate('/dashboard')
       } else {
-        // First step: password authentication
-        const result = await login(email, password)
+        // First step: password authentication with location data
+        const result = await login(email, password, location)
         if (result.mfaRequired) {
           setMfaRequired(true)
           setMfaChallengeToken(result.mfaChallengeToken || '')
@@ -78,6 +89,7 @@ const Login: React.FC = () => {
       setError(getApiErrorMessage(err, 'Login failed. Please try again.'))
     } finally {
       setLoading(false)
+      setAcquiringLocation(false)
     }
   }
 
