@@ -9,7 +9,7 @@ services:
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
           name: authcore-db
-          property: connectionString
+          property: DATABASE_URL
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
           name: authcore-db
@@ -18,6 +18,12 @@ services:
         fromDatabase:
           name: authcore-db
           property: password
+      - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+        value: org.postgresql.Driver
+      - key: SPRING_JPA_DATABASE_PLATFORM
+        value: org.hibernate.dialect.PostgreSQLDialect
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: update
       - key: JWT_SECRET
         sync: false
       - key: JWT_EXPIRATION
