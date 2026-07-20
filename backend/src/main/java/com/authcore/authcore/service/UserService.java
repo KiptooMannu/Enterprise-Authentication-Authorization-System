@@ -80,7 +80,6 @@ public class UserService {
         return userRepository.findAll();
     }
 
-    @NonNull
     public UserEntity findById(Long id) {
         if (id == null) {
             throw new IllegalArgumentException("User ID cannot be null");

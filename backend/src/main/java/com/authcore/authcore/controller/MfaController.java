@@ -1,6 +1,5 @@
 package com.authcore.authcore.controller;
 
-import com.authcore.authcore.dto.LoginResponse;
 import com.authcore.authcore.dto.MfaSetupResponse;
 import com.authcore.authcore.dto.MfaStatusResponse;
 import com.authcore.authcore.entity.UserEntity;
