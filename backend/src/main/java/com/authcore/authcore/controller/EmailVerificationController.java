@@ -1,6 +1,7 @@
 package com.authcore.authcore.controller;
 
 import com.authcore.authcore.service.EmailVerificationService;
+import com.authcore.authcore.util.ApiResponses;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,15 +22,9 @@ public class EmailVerificationController {
         boolean verified = emailVerificationService.verifyEmail(token);
         
         if (verified) {
-            return ResponseEntity.ok(Map.of(
-                "status", "success",
-                "message", "Email verified successfully"
-            ));
+            return ResponseEntity.ok(ApiResponses.success("Email verified successfully"));
         } else {
-            return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", "Invalid or expired verification token"
-            ));
+            return ResponseEntity.badRequest().body(ApiResponses.message("error", "Invalid or expired verification token"));
         }
     }
 
@@ -38,17 +33,11 @@ public class EmailVerificationController {
         String email = body.get("email");
         
         if (email == null) {
-            return ResponseEntity.badRequest().body(Map.of(
-                "status", "error",
-                "message", "Email is required"
-            ));
+            return ResponseEntity.badRequest().body(ApiResponses.message("error", "Email is required"));
         }
         
         emailVerificationService.resendVerificationToken(email);
         
-        return ResponseEntity.ok(Map.of(
-            "status", "success",
-            "message", "Verification email sent successfully"
-        ));
+        return ResponseEntity.ok(ApiResponses.success("Verification email sent successfully"));
     }
 }

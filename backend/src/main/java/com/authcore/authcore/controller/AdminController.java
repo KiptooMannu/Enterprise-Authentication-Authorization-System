@@ -14,6 +14,8 @@ import com.authcore.authcore.service.SystemConfigService;
 import com.authcore.authcore.service.RateLimitService;
 import com.authcore.authcore.service.LoginLocationService;
 import com.authcore.authcore.repository.RefreshTokenRepository;
+import com.authcore.authcore.util.ApiResponses;
+import com.authcore.authcore.util.HttpRequestUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -48,7 +50,7 @@ public class AdminController {
     @GetMapping("/users")
     public List<UserResponse> listUsers() {
         return userService.findAllUsers().stream()
-            .map(this::toUserResponse)
+            .map(UserResponse::from)
             .collect(Collectors.toList());
     }
 
@@ -56,24 +58,24 @@ public class AdminController {
     public UserResponse updateRole(@PathVariable Long id, @RequestParam UserRole role, Authentication authentication, HttpServletRequest httpRequest) {
         UserEntity targetUser = userService.findById(id);
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         
         UserEntity user = userService.updateUserRole(id, role);
         auditLogService.logEvent(adminUser, "ROLE_UPDATED", "User", id, ipAddress, 
             "Updated role for user " + targetUser.getEmail() + " to " + role);
-        return toUserResponse(user);
+        return UserResponse.from(user);
     }
 
     @PutMapping("/users/{id}/status")
     public UserResponse updateStatus(@PathVariable Long id, @RequestParam boolean enabled, Authentication authentication, HttpServletRequest httpRequest) {
         UserEntity targetUser = userService.findById(id);
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         
         UserEntity user = userService.updateUserStatus(id, enabled);
         auditLogService.logEvent(adminUser, "STATUS_UPDATED", "User", id, ipAddress, 
             "Updated status for user " + targetUser.getEmail() + " to " + (enabled ? "enabled" : "disabled"));
-        return toUserResponse(user);
+        return UserResponse.from(user);
     }
 
     @GetMapping("/audit-logs")
@@ -123,11 +125,11 @@ public class AdminController {
         refreshTokenRepository.deleteById(id);
         
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         auditLogService.logEvent(adminUser, "SESSION_REVOKED", "RefreshToken", id, ipAddress,
             "Revoked session for user " + (token.getUser() != null ? token.getUser().getUsername() : "unknown"));
         
-        return Map.of("status", "success", "message", "Session revoked successfully");
+        return ApiResponses.success("Session revoked successfully");
     }
 
     @GetMapping("/config")
@@ -153,23 +155,23 @@ public class AdminController {
         String description = request.get("description");
 
         if (key == null || value == null || category == null) {
-            return Map.of("status", "error", "message", "Missing required fields");
+            return ApiResponses.message("error", "Missing required fields");
         }
 
         systemConfigService.createOrUpdateConfig(key, value, category, description);
 
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         auditLogService.logEvent(adminUser, "CONFIG_UPDATED", "SystemConfig", null, ipAddress,
             "Updated configuration: " + key + " = " + value);
 
-        return Map.of("status", "success", "message", "Configuration updated successfully");
+        return ApiResponses.success("Configuration updated successfully");
     }
 
     @PostMapping("/config/initialize")
     public Map<String, String> initializeConfigs() {
         systemConfigService.initializeDefaultConfigs();
-        return Map.of("status", "success", "message", "Default configurations initialized");
+        return ApiResponses.success("Default configurations initialized");
     }
 
     @GetMapping("/rate-limits")
@@ -185,17 +187,17 @@ public class AdminController {
         Boolean enabled = request.get("enabled") != null ? (Boolean) request.get("enabled") : true;
 
         if (endpoint == null || maxRequests == null || windowMinutes == null) {
-            return Map.of("status", "error", "message", "Missing required fields");
+            return ApiResponses.message("error", "Missing required fields");
         }
 
         rateLimitService.createOrUpdateRateLimit(endpoint, maxRequests, windowMinutes, enabled);
 
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         auditLogService.logEvent(adminUser, "RATE_LIMIT_UPDATED", "RateLimit", null, ipAddress,
             "Updated rate limit for endpoint: " + endpoint);
 
-        return Map.of("status", "success", "message", "Rate limit updated successfully");
+        return ApiResponses.success("Rate limit updated successfully");
     }
 
     @DeleteMapping("/rate-limits/{endpoint}")
@@ -203,17 +205,17 @@ public class AdminController {
         rateLimitService.deleteRateLimit(endpoint);
 
         UserEntity adminUser = userService.findByEmail(authentication.getName());
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         auditLogService.logEvent(adminUser, "RATE_LIMIT_DELETED", "RateLimit", null, ipAddress,
             "Deleted rate limit for endpoint: " + endpoint);
 
-        return Map.of("status", "success", "message", "Rate limit deleted successfully");
+        return ApiResponses.success("Rate limit deleted successfully");
     }
 
     @PostMapping("/rate-limits/initialize")
     public Map<String, String> initializeRateLimits() {
         rateLimitService.initializeDefaultRateLimits();
-        return Map.of("status", "success", "message", "Default rate limits initialized");
+        return ApiResponses.success("Default rate limits initialized");
     }
 
     @GetMapping("/login-locations")
@@ -231,15 +233,4 @@ public class AdminController {
         return loginLocationService.getMostRecentLoginLocation(userId);
     }
 
-    private UserResponse toUserResponse(UserEntity user) {
-        return new UserResponse(user.getId(), user.getUsername(), user.getEmail(), user.getRole(), user.isEnabled(), user.getCreatedAt());
-    }
-
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
-    }
 }

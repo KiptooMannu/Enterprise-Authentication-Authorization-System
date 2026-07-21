@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Lock, Mail, User, AlertCircle } from 'lucide-react'
+import { getApiErrorMessage } from '../lib/errors'
 
 const Register: React.FC = () => {
   const [username, setUsername] = useState('')
@@ -36,7 +37,7 @@ const Register: React.FC = () => {
       await register(username, email, password)
       navigate('/dashboard')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed. Please try again.')
+      setError(getApiErrorMessage(err, 'Registration failed. Please try again.'))
     } finally {
       setLoading(false)
     }

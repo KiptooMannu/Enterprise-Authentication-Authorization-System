@@ -8,6 +8,7 @@ import com.authcore.authcore.security.JwtService;
 import com.authcore.authcore.service.MfaService;
 import com.authcore.authcore.service.RefreshTokenService;
 import com.authcore.authcore.service.UserService;
+import com.authcore.authcore.util.ApiResponses;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -47,14 +48,14 @@ public class MfaController {
     public ResponseEntity<?> verifySetup(Authentication authentication, @RequestBody Map<String, String> body) {
         String code = body.get("code");
         if (code == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "code required"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("code required"));
         }
         UserEntity user = userService.findByEmail(authentication.getName());
         try {
             mfaService.confirmSetup(user, code);
             return ResponseEntity.ok(Map.of("message", "MFA enabled successfully"));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponses.error(e.getMessage()));
         }
     }
 
@@ -62,14 +63,14 @@ public class MfaController {
     public ResponseEntity<?> disable(Authentication authentication, @RequestBody Map<String, String> body) {
         String code = body.get("code");
         if (code == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "code required"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("code required"));
         }
         UserEntity user = userService.findByEmail(authentication.getName());
         try {
             mfaService.disable(user, code);
             return ResponseEntity.ok(Map.of("message", "MFA disabled successfully"));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponses.error(e.getMessage()));
         }
     }
 
@@ -78,7 +79,7 @@ public class MfaController {
         String challengeToken = body.get("challengeToken");
         String code = body.get("code");
         if (challengeToken == null || code == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "challengeToken and code required"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("challengeToken and code required"));
         }
         try {
             UserEntity user = mfaService.resolveLoginChallenge(challengeToken, code);
@@ -87,7 +88,7 @@ public class MfaController {
             AuthResponse authResponse = new AuthResponse(accessToken, refreshToken.getToken(), "success");
             return ResponseEntity.ok(authResponse);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponses.error(e.getMessage()));
         }
     }
 }

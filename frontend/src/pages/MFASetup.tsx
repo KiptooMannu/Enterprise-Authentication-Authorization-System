@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { mfaApi } from '../services/api'
+import { getApiErrorMessage } from '../lib/errors'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -27,7 +28,7 @@ const MFASetup: React.FC = () => {
       setOtpAuthUri(response.data.otpAuthUri)
       setStep('setup')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to start MFA setup')
+      setError(getApiErrorMessage(err, 'Failed to start MFA setup'))
     } finally {
       setLoading(false)
     }
@@ -42,7 +43,7 @@ const MFASetup: React.FC = () => {
       await mfaApi.verify(verificationCode)
       setStep('complete')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid verification code')
+      setError(getApiErrorMessage(err, 'Invalid verification code'))
     } finally {
       setLoading(false)
     }

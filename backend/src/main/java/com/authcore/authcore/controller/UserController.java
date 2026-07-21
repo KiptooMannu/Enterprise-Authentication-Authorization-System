@@ -10,6 +10,8 @@ import com.authcore.authcore.security.AuthResponse;
 import com.authcore.authcore.security.JwtService;
 import com.authcore.authcore.service.MfaService;
 import com.authcore.authcore.service.UserService;
+import com.authcore.authcore.util.ApiResponses;
+import com.authcore.authcore.util.HttpRequestUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -48,15 +50,15 @@ public class UserController {
     @ResponseStatus(HttpStatus.CREATED)
     public UserResponse register(@Valid @RequestBody UserRegistrationRequest request, HttpServletRequest httpRequest) {
         UserEntity user = userService.registerUser(request);
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         auditLogService.logEvent(user, "USER_REGISTERED", "User", user.getId(), ipAddress, "User registered with email: " + user.getEmail());
-        return toUserResponse(user);
+        return UserResponse.from(user);
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         UserEntity user = userService.authenticateUser(request);
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         String userAgent = httpRequest.getHeader("User-Agent");
 
         // Check for new location security risk
@@ -124,28 +126,28 @@ public class UserController {
     @GetMapping("/me")
     public UserResponse me(Authentication authentication) {
         UserEntity user = userService.findByEmail(authentication.getName());
-        return toUserResponse(user);
+        return UserResponse.from(user);
     }
 
     @PostMapping("/change-password")
     public UserResponse changePassword(Authentication authentication, @Valid @RequestBody ChangePasswordRequest request, HttpServletRequest httpRequest) {
         UserEntity user = userService.changePassword(authentication.getName(), request);
-        String ipAddress = getClientIpAddress(httpRequest);
+        String ipAddress = HttpRequestUtils.getClientIpAddress(httpRequest);
         auditLogService.logEvent(user, "PASSWORD_CHANGED", "User", user.getId(), ipAddress, "User changed password");
-        return toUserResponse(user);
+        return UserResponse.from(user);
     }
 
     @PostMapping("/forgot-password")
     public ResponseEntity<?> forgotPassword(@RequestBody Map<String, String> body) {
         String email = body.get("email");
         if (email == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Email is required"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("Email is required"));
         }
         try {
             passwordResetService.createPasswordResetToken(email);
-            return ResponseEntity.ok(Map.of("status", "success", "message", "Password reset email sent"));
+            return ResponseEntity.ok(ApiResponses.success("Password reset email sent"));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+            return ResponseEntity.badRequest().body(ApiResponses.error(e.getMessage()));
         }
     }
 
@@ -155,14 +157,14 @@ public class UserController {
         String newPassword = body.get("newPassword");
         
         if (token == null || newPassword == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Token and new password are required"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("Token and new password are required"));
         }
         
         boolean success = passwordResetService.resetPassword(token, newPassword);
         if (success) {
-            return ResponseEntity.ok(Map.of("status", "success", "message", "Password reset successfully"));
+            return ResponseEntity.ok(ApiResponses.success("Password reset successfully"));
         } else {
-            return ResponseEntity.badRequest().body(Map.of("error", "Invalid or expired reset token"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("Invalid or expired reset token"));
         }
     }
 
@@ -187,17 +189,17 @@ public class UserController {
     public ResponseEntity<?> revokeSession(Authentication authentication, @RequestBody Map<String, String> body) {
         String token = body.get("token");
         if (token == null) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Token is required"));
+            return ResponseEntity.badRequest().body(ApiResponses.error("Token is required"));
         }
         refreshTokenService.deleteByToken(token);
-        return ResponseEntity.ok(Map.of("status", "success", "message", "Session revoked successfully"));
+        return ResponseEntity.ok(ApiResponses.success("Session revoked successfully"));
     }
 
     @PostMapping("/sessions/revoke-all")
     public ResponseEntity<?> revokeAllSessions(Authentication authentication) {
         UserEntity user = userService.findByEmail(authentication.getName());
         refreshTokenService.deleteByUser(user);
-        return ResponseEntity.ok(Map.of("status", "success", "message", "All sessions revoked"));
+        return ResponseEntity.ok(ApiResponses.success("All sessions revoked"));
     }
 
     @GetMapping("/audit-logs")
@@ -206,15 +208,4 @@ public class UserController {
         return ResponseEntity.ok(auditLogService.getUserAuditLogs(user));
     }
 
-    private UserResponse toUserResponse(UserEntity user) {
-        return new UserResponse(user.getId(), user.getUsername(), user.getEmail(), user.getRole(), user.isEnabled(), user.getCreatedAt());
-    }
-
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            return xForwardedFor.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
-    }
 }

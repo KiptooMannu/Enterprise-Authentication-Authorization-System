@@ -4,6 +4,7 @@ import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.entity.UserRole;
 import com.authcore.authcore.repository.UserRepository;
 import com.authcore.authcore.service.RefreshTokenService;
+import com.authcore.authcore.util.HttpRequestUtils;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -93,7 +94,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
             // Generate tokens
             String accessToken = jwtService.generateToken(user.getEmail());
-            String ipAddress = getClientIpAddress(request);
+            String ipAddress = HttpRequestUtils.getClientIpAddress(request);
             String userAgent = request.getHeader("User-Agent");
             var refresh = refreshTokenService.createRefreshToken(user, ipAddress, userAgent);
 
@@ -108,19 +109,5 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         } else {
             super.onAuthenticationSuccess(request, response, authentication);
         }
-    }
-
-    private String getClientIpAddress(HttpServletRequest request) {
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
-            String[] ips = xForwardedFor.split(",");
-            if (ips.length > 0) {
-                String trimmedIp = ips[0].trim();
-                if (!trimmedIp.isEmpty()) {
-                    return trimmedIp;
-                }
-            }
-        }
-        return request.getRemoteAddr();
     }
 }

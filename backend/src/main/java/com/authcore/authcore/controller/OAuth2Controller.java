@@ -3,6 +3,7 @@ package com.authcore.authcore.controller;
 import com.authcore.authcore.entity.UserEntity;
 import com.authcore.authcore.repository.UserRepository;
 import com.authcore.authcore.service.UserService;
+import com.authcore.authcore.util.ApiResponses;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -38,13 +39,13 @@ public class OAuth2Controller {
         UserEntity user = userService.findByEmail(authentication.getName());
         
         if (user.getOauthProvider() == null || !user.getOauthProvider().equalsIgnoreCase(provider)) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Account is not linked to " + provider));
+            return ResponseEntity.badRequest().body(ApiResponses.error("Account is not linked to " + provider));
         }
 
         // Prevent lockout if there's no password hash
         if (user.getPasswordHash() == null) {
-            return ResponseEntity.badRequest().body(Map.of(
-                "error", "Cannot unlink the only authentication method. Please set a password first."
+            return ResponseEntity.badRequest().body(ApiResponses.error(
+                "Cannot unlink the only authentication method. Please set a password first."
             ));
         }
 
@@ -52,6 +53,6 @@ public class OAuth2Controller {
         user.setOauthProviderId(null);
         userRepository.save(user);
 
-        return ResponseEntity.ok(Map.of("status", "success", "message", "Unlinked " + provider + " account successfully"));
+        return ResponseEntity.ok(ApiResponses.success("Unlinked " + provider + " account successfully"));
     }
 }

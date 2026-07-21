@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { authApi } from '../services/api'
+import { getApiErrorMessage } from '../lib/errors'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -42,7 +43,7 @@ const ResetPassword: React.FC = () => {
       await authApi.resetPassword(token, password)
       setSuccess('Your password has been reset successfully.')
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to reset password. Token may have expired.')
+      setError(getApiErrorMessage(err, 'Failed to reset password. Token may have expired.'))
     } finally {
       setLoading(false)
     }
